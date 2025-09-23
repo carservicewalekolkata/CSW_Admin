@@ -6,7 +6,7 @@ const cookieName = process.env.COOKIE_NAME || 'app_session'
 const secret = new TextEncoder().encode(process.env.JWT_SECRET)
 
 // routes allowed without a token
-const publicPaths = ['/login', '/logout', '/api/auth/login', '/api/auth/logout']
+const publicPaths = ['/login', '/forgot-password', '/api/auth/login', '/api/auth/forgot-password']
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl

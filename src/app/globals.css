@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f3f4ff;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-muted: #e3e7ff;
+  --brand-50: #f6f5ff;
+  --brand-100: #e8e6ff;
+  --brand-200: #d0ccff;
+  --brand-300: #b4aaff;
+  --brand-400: #9484ff;
+  --brand-500: #725cff;
+  --brand-600: #553df0;
+  --brand-700: #3c21c1;
+  --brand-800: #29138d;
+  --brand-900: #1a0b5c;
+  --accent-500: #ffb400;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-700: #334155;
+  --neutral-900: #0f172a;
+  --type-title: clamp(1.9rem, 1.38rem + 1.65vw, 2.6rem);
+  --type-body: 1rem;
+  --type-label: 0.875rem;
+  --radius-card: 24px;
+  --radius-pill: 999px;
+  --elevation-card: 0 36px 80px -40px rgba(22, 16, 86, 0.35);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-brand-50: var(--brand-50);
+  --color-brand-100: var(--brand-100);
+  --color-brand-200: var(--brand-200);
+  --color-brand-300: var(--brand-300);
+  --color-brand-400: var(--brand-400);
+  --color-brand-500: var(--brand-500);
+  --color-brand-600: var(--brand-600);
+  --color-brand-700: var(--brand-700);
+  --color-brand-800: var(--brand-800);
+  --color-brand-900: var(--brand-900);
+  --color-accent-500: var(--accent-500);
+  --color-muted-400: var(--neutral-400);
+  --color-muted-500: var(--neutral-500);
+  --color-muted-700: var(--neutral-700);
+  --color-muted-900: var(--neutral-900);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-size-title: var(--type-title);
+  --font-size-body: var(--type-body);
+  --font-size-label: var(--type-label);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
+  --shadow-card: var(--elevation-card);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #06071b;
+    --foreground: #eff4ff;
+    --surface: #0f1026;
+    --surface-muted: #17183d;
+    --brand-300: #9484ff;
+    --brand-400: #7c68ff;
+    --brand-500: #5f4deb;
+    --brand-600: #4b3bd1;
+    --brand-700: #35269f;
+    --brand-800: #22176e;
+    --brand-900: #130d47;
+    --accent-500: #ffb85c;
+    --neutral-400: #a8b3ce;
+    --neutral-500: #8b96b6;
+    --neutral-700: #4f5874;
+    --neutral-900: #d7dcf5;
   }
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(circle at top right, rgba(114, 92, 255, 0.12), transparent 55%), var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(86, 61, 240, 0.45);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }

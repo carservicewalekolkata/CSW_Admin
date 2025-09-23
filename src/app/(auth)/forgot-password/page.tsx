@@ -1,11 +1,12 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { jwtVerify } from 'jose'
 
 import AuthShell from '@/modules/auth/AuthShell'
-import LoginForm from '@/modules/LoginPageClient'
+import ForgotPasswordForm from '@/modules/ForgotPasswordForm'
 
-export default async function LoginPage() {
+export default async function ForgotPasswordPage() {
   const cookieStore = await cookies()
   const token = cookieStore.get(process.env.COOKIE_NAME!)?.value
 
@@ -18,15 +19,18 @@ export default async function LoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back!"
-      description="Enter your details below to access your dashboard, manage data, and continue where you left off."
+      title="Reset your password"
+      description="We'll guide you through the steps to access your account again."
       footer={(
         <>
-          Car Service Wale &copy; 2025
+          Remembered it?{' '}
+          <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-500">
+            Return to login
+          </Link>
         </>
       )}
     >
-      <LoginForm />
+      <ForgotPasswordForm />
     </AuthShell>
   )
 }
