@@ -2,12 +2,18 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 import type { AuthState, AuthUser } from "@/types/auth";
 
+export const createPasswordResetState = () => ({
+  status: "idle" as const,
+  message: null as string | null,
+});
+
 const initialState: AuthState = {
   user: null,
   accessToken: null,
-  rememberMe: false,
+  rememberMe: true,
   status: "idle",
   error: null,
+  passwordReset: createPasswordResetState(),
 };
 
 const authSlice = createSlice({
@@ -34,9 +40,22 @@ const authSlice = createSlice({
       state.accessToken = null;
       state.status = "idle";
       state.error = null;
+      state.passwordReset = createPasswordResetState();
     },
     setRememberMe(state, action: PayloadAction<boolean>) {
       state.rememberMe = action.payload;
+    },
+    passwordResetRequested(state) {
+      state.passwordReset = { status: "loading", message: null };
+    },
+    passwordResetSucceeded(state, action: PayloadAction<string | undefined>) {
+      state.passwordReset = {
+        status: "success",
+        message: action.payload ?? "If the account exists, a reset link has been sent.",
+      };
+    },
+    passwordResetFailed(state, action: PayloadAction<string>) {
+      state.passwordReset = { status: "error", message: action.payload };
     },
     updateUserProfile(state, action: PayloadAction<Partial<AuthUser>>) {
       if (!state.user) return;
@@ -54,6 +73,9 @@ export const {
   loginFailed,
   logout,
   setRememberMe,
+  passwordResetRequested,
+  passwordResetSucceeded,
+  passwordResetFailed,
   updateUserProfile,
   resetAuthState,
 } = authSlice.actions;

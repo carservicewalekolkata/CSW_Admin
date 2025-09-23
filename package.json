@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:superuser": "node scripts/seed-super-user.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.9.0",

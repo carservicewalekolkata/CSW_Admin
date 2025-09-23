@@ -13,4 +13,8 @@ export interface AuthState {
   rememberMe: boolean;
   status: AuthStatus;
   error: string | null;
+  passwordReset: {
+    status: 'idle' | 'loading' | 'success' | 'error';
+    message: string | null;
+  };
 }

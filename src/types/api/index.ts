@@ -2,6 +2,8 @@ export interface AuthEndpointConfig {
   login: string;
   logout: string;
   refresh: string;
+  status: string;
+  forgotPassword: string;
 }
 
 export interface UserEndpointConfig {

@@ -1,12 +1,56 @@
 'use client'
 
-import type { FormEvent } from 'react'
+import { useState, type ChangeEvent, type FormEvent } from 'react'
+
+import { authApi, AuthApiError } from '@/store/slices/auth/authApi'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import {
+  passwordResetFailed,
+  passwordResetRequested,
+  passwordResetSucceeded,
+  createPasswordResetState,
+} from '@/store/slices/auth/authSlice'
 
 const ForgotPasswordForm = () => {
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    // TODO: replace with real submit handler when auth is connected
+  const dispatch = useAppDispatch()
+  const { passwordReset = createPasswordResetState() } = useAppSelector((state) => state.auth)
+  const [email, setEmail] = useState('')
+  const [localError, setLocalError] = useState<string | null>(null)
+
+  const handleEmailChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setEmail(event.target.value)
   }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const trimmedEmail = email.trim().toLowerCase()
+
+    if (!trimmedEmail) {
+      setLocalError('Email is required.')
+      return
+    }
+
+    dispatch(passwordResetRequested())
+    setLocalError(null)
+
+    try {
+      const response = await authApi.requestPasswordReset({ email: trimmedEmail })
+      dispatch(passwordResetSucceeded(response.message))
+    } catch (error) {
+      const message =
+        error instanceof AuthApiError
+          ? error.message
+          : 'Unable to send the reset link right now. Please try again later.'
+      setLocalError(message)
+      dispatch(passwordResetFailed(message))
+    }
+  }
+
+  const isSubmitting = passwordReset.status === 'loading'
+  const successMessage = passwordReset.status === 'success' ? passwordReset.message : null
+  const errorMessage = localError ?? (passwordReset.status === 'error' ? passwordReset.message : null)
+  const buttonLabel = isSubmitting ? 'Sending...' : 'Send reset link'
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-body">
@@ -25,15 +69,31 @@ const ForgotPasswordForm = () => {
           placeholder="you@example.com"
           required
           autoComplete="email"
-          className="mt-2 block w-full border border-none bg-brand-50/30 px-4 py-3 text-foreground placeholder:text-muted-400 focus:outline-none focus:ring-0 focus:ring-brand-400 focus:ring-offset-0 focus:ring-offset-surface"
+          value={email}
+          onChange={handleEmailChange}
+          disabled={isSubmitting}
+          className="mt-2 block w-full border border-none bg-brand-50/30 px-4 py-3 text-foreground placeholder:text-muted-400 focus:outline-none focus:ring-0 focus:ring-brand-400 focus:ring-offset-0 focus:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-70"
         />
       </fieldset>
 
+      {successMessage && (
+        <p className="text-sm text-green-600" role="status">
+          {successMessage}
+        </p>
+      )}
+
+      {errorMessage && (
+        <p className="text-sm text-red-500" role="alert">
+          {errorMessage}
+        </p>
+      )}
+
       <button
         type="submit"
-        className="flex w-full items-center justify-center gap-2 rounded-pill bg-gradient-to-r from-brand-500 via-brand-500 to-brand-600 px-4 py-3 text-base font-semibold text-white transition hover:from-brand-600 hover:via-brand-600 hover:to-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+        disabled={isSubmitting}
+        className="flex w-full items-center justify-center gap-2 rounded-pill bg-gradient-to-r from-brand-500 via-brand-500 to-brand-600 px-4 py-3 text-base font-semibold text-white transition hover:from-brand-600 hover:via-brand-600 hover:to-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-70"
       >
-        Send reset link
+        {buttonLabel}
       </button>
     </form>
   )
