@@ -24,6 +24,10 @@ jobs:
       GOMECHANIC_BEARER_TOKEN: ${{ secrets.GOMECHANIC_BEARER_TOKEN }}
       SUPER_USER_MAIL: ${{ secrets.SUPER_USER_MAIL }}
       SUPER_USER_PASSWORD: ${{ secrets.SUPER_USER_PASSWORD }}
+      COOKIE_NAME: ${{ secrets.COOKIE_NAME }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+      JWT_RESET_SECRET: ${{ secrets.JWT_RESET_SECRET }}
 
     steps:
       - name: Checkout

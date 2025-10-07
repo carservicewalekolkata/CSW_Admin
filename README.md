@@ -16,11 +16,15 @@ All runtime configuration is sourced from the operating system (or container) en
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `MONGODB_URI` | ✅ | Connection string with write access to the CSW database. |
-| `DB_CSW_NAME` | ⛔ | Optional override when the database name is not embedded in the URI. |
-| `GOMECHANIC_BEARER_TOKEN` | ⛔ | Enables the GoMechanic catalogue sync. |
-| `SUPER_USER_MAIL` | ✅ | Login for the seeded super admin account. |
-| `SUPER_USER_PASSWORD` | ✅ | Initial/reset password for the seeded super admin. |
+| `MONGODB_URI` | Yes | Connection string with write access to the CSW database. |
+| `DB_CSW_NAME` | Optional | Override when the database name is not embedded in the URI. |
+| `GOMECHANIC_BEARER_TOKEN` | Optional | Enables the GoMechanic catalogue sync. |
+| `SUPER_USER_MAIL` | Yes | Login for the seeded super admin account. |
+| `SUPER_USER_PASSWORD` | Yes | Initial/reset password for the seeded super admin. |
+| `COOKIE_NAME` | Yes | Session cookie name expected by the Next.js app. |
+| `JWT_SECRET` | Yes | Secret used to sign access tokens. |
+| `JWT_REFRESH_SECRET` | Yes | Secret used to sign refresh tokens. |
+| `JWT_RESET_SECRET` | Yes | Secret used to sign password reset tokens. |
 
 For local development you may still create `admin-app/.env.local` (Next.js automatically loads it) and/or `scripts/.env.local`; the Python helpers will also look in the repository root and `admin-app` for convenience. In containerised environments supply the values through Docker `--build-arg`, compose environment variables, or Azure Container App settings.
 
