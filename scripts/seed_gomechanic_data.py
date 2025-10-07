@@ -15,8 +15,32 @@ from pymongo import MongoClient, ReturnDocument
 
 from gridfs import GridFS
 
-# Load from .env file into environment
-load_dotenv()
+
+def _load_environment():
+  """Load optional .env files for local use without overriding host environment."""
+  env_loaded = False
+  script_dir = Path(__file__).resolve().parent
+  project_root = script_dir.parent
+  admin_app_dir = project_root / "admin-app"
+
+  for base_dir in (script_dir, project_root, admin_app_dir):
+    if not base_dir.exists():
+      continue
+    for file_name in (".env.local", ".env"):
+      candidate = base_dir / file_name
+      if candidate.exists():
+        load_dotenv(candidate, override=False)
+        env_loaded = True
+
+  if not env_loaded:
+    print("No .env file found; relying on operating system environment variables.")
+
+
+_load_environment()
+
+MONGODB_URI = os.getenv("MONGODB_URI")
+if not MONGODB_URI:
+  raise SystemExit("Missing MONGODB_URI environment variable – export it locally or inject it into the container image.")
 
 BASE_URL = "https://gomechanic.app/api"
 BASE_URL_2 = "https://gomechanic.in/api"
@@ -47,10 +71,10 @@ ASSETS_MODELS_DIR = Path("assets").joinpath("images", "models")
 BATTERY_SERVICES_DIR = Path("assets").joinpath("services", "batteries")
 SERVICES_CACHE_PATH = Path("assets").joinpath("services_cache.json")
 
-client = MongoClient(os.getenv("MONGODB_URI"))
+client = MongoClient(MONGODB_URI)
 
-# Create/use database "cswdb"
-db = client["cswdb"]
+db_name = os.getenv("DB_CSW_NAME") or os.getenv("MONGODB_DB") or "cswdb"
+db = client[db_name]
 
 # Create/use collections
 brands = db["brand"]

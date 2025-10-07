@@ -7,7 +7,9 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "seed:superuser": "node scripts/seed-super-user.mjs"
+    "seed:superuser": "python ../scripts/seed_super_user.py",
+    "seed:gomechanic": "python ../scripts/seed_gomechanic_data.py",
+    "seed": "npm run seed:superuser && npm run seed:gomechanic"
   },
   "dependencies": {
     "@reduxjs/toolkit": "^2.9.0",

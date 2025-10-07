@@ -1,0 +1,14 @@
+.git
+.github
+.next
+node_modules
+admin-app/node_modules
+admin-app/.next
+admin-app/.turbo
+admin-app/.env.local
+admin-app/.env
+scripts/.venv
+scripts/__pycache__
+*.log
+Dockerfile~
+README.md~

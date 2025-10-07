@@ -1,0 +1,29 @@
+version: "3.9"
+
+x-csw-env: &csw-env
+  MONGODB_URI: ${MONGODB_URI:?Set MONGODB_URI in your environment}
+  DB_CSW_NAME: ${DB_CSW_NAME:-}
+  GOMECHANIC_BEARER_TOKEN: ${GOMECHANIC_BEARER_TOKEN:-}
+  SUPER_USER_MAIL: ${SUPER_USER_MAIL:?Set SUPER_USER_MAIL in your environment}
+  SUPER_USER_PASSWORD: ${SUPER_USER_PASSWORD:?Set SUPER_USER_PASSWORD in your environment}
+  PORT: ${PORT:-3000}
+
+services:
+  admin-app:
+    image: ghcr.io/jabotics/csw-admin:latest
+    build:
+      context: .
+      target: runner
+    environment: *csw-env
+    ports:
+      - "${PORT:-3000}:3000"
+    restart: unless-stopped
+
+  scripts:
+    image: ghcr.io/jabotics/csw-admin:latest
+    build:
+      context: .
+      target: runner
+    entrypoint: ["sleep", "infinity"]
+    environment: *csw-env
+    profiles: ["scripts"]
