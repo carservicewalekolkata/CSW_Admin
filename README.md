@@ -123,6 +123,7 @@ Remember to schedule or manually trigger the Python scripts (for example with an
 ## Continuous Delivery
 
 Pushing to `development` or `main` kicks off the **Build and Publish Container** workflow located at `.github/workflows/container.yml`. The job uses Docker Buildx with the GitHub Actions cache to build the `runner` stage and push the resulting image to `ghcr.io/carservicewalekolkata/csw-admin`, tagging it with the branch name and commit SHA automatically. Provide any required secrets (for example `MONGODB_URI`) as repository or environment secrets if you extend the workflow to run database migrations or other scripts.
+GitHub Secrets defined with those names are exposed to the workflow steps as environment variables so you can safely consume them during CI runs without baking them into the final image.
 
 ## Additional Notes
 
