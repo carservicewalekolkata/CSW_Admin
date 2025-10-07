@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import bcrypt
+from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -15,6 +17,22 @@ from pymongo.errors import ConfigurationError, PyMongoError
 
 
 REQUIRED_ENV_KEYS = ("MONGODB_URI", "SUPER_USER_MAIL", "SUPER_USER_PASSWORD")
+
+
+def _load_environment() -> None:
+    """Load environment variables for local runs without overriding host env."""
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+    admin_app_dir = project_root / "admin-app"
+
+    for base_dir in (script_dir, project_root, admin_app_dir):
+        if not base_dir.exists():
+            continue
+        for file_name in (".env.local", ".env"):
+            candidate = base_dir / file_name
+            if candidate.exists():
+                load_dotenv(candidate, override=False)
+
 
 
 def _get_required_env(key: str) -> str:
@@ -78,6 +96,8 @@ def _ensure_super_admin(users: Collection, email: str, password: str) -> None:
 
 
 def main() -> None:
+    _load_environment()
+
     for key in REQUIRED_ENV_KEYS:
         _get_required_env(key)
 
