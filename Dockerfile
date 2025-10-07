@@ -7,7 +7,6 @@ ARG UBUNTU_VERSION=22.04
 ###########################################################################
 FROM ubuntu:${UBUNTU_VERSION} AS base
 ENV DEBIAN_FRONTEND=noninteractive \
-    NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
 RUN apt-get update \
@@ -89,6 +88,7 @@ ENV MONGODB_URI=${MONGODB_URI} \
     GOMECHANIC_BEARER_TOKEN=${GOMECHANIC_BEARER_TOKEN} \
     SUPER_USER_MAIL=${SUPER_USER_MAIL} \
     SUPER_USER_PASSWORD=${SUPER_USER_PASSWORD} \
+    NODE_ENV=production \
     PATH="/opt/venv/bin:${PATH}" \
     PORT=3000
 
