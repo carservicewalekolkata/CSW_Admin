@@ -56,7 +56,7 @@ The Python scripts now rely on OS environment variables. If values are missing t
 
 ## Docker Tooling
 
-The `Dockerfile` builds on Ubuntu 22.04 LTS, compiles the Next.js application, installs Python dependencies into `/opt/venv`, and exposes both the app and scripts in the same container image.
+The `Dockerfile` builds on Ubuntu 22.04 LTS, compiles the Next.js application, installs Python dependencies into `/opt/venv`, and exposes both the app and scripts in the same container image. Compose now reuses a shared BuildKit cache stored under `.docker/cache` so repeat builds reuse layers instead of recompiling every time.
 
 ```bash
 # Build (multi-arch buildx recommended for GHCR/Azure deployments)
@@ -66,10 +66,10 @@ docker buildx build \
   --build-arg MONGODB_URI=$MONGODB_URI \
   --build-arg SUPER_USER_MAIL=$SUPER_USER_MAIL \
   --build-arg SUPER_USER_PASSWORD=$SUPER_USER_PASSWORD \
-  -t ghcr.io/jabotics/csw-admin:latest .
+  -t ghcr.io/carservicewalekolkata/csw-admin:latest .
 
 # Run locally
-docker run --rm -p 3000:3000 ghcr.io/jabotics/csw-admin:latest
+docker run --rm -p 3000:3000 ghcr.io/carservicewalekolkata/csw-admin:latest
 ```
 
 Use `docker compose` for a smoother local workflow and to access the bundled Python scripts:
@@ -93,7 +93,7 @@ docker compose run --rm scripts python /app/scripts/seed_gomechanic_data.py
 echo $GHCR_TOKEN | docker login ghcr.io -u YOUR_GITHUB_HANDLE --password-stdin
 docker buildx build --platform linux/amd64 \
   --target runner \
-  -t ghcr.io/jabotics/csw-admin:latest \
+  -t ghcr.io/carservicewalekolkata/csw-admin:latest \
   --push .
 ```
 
@@ -108,7 +108,7 @@ Tag additional versions (`:prod`, `:staging`, etc.) as needed. GitHub Actions ca
      --name csw-admin \
      --resource-group <rg> \
      --environment <env-name> \
-     --image ghcr.io/jabotics/csw-admin:latest \
+     --image ghcr.io/carservicewalekolkata/csw-admin:latest \
      --target-port 3000 \
      --ingress external \
      --registry-server ghcr.io \
@@ -119,6 +119,10 @@ Tag additional versions (`:prod`, `:staging`, etc.) as needed. GitHub Actions ca
 3. Repeat with `az containerapp update` to roll out new tags.
 
 Remember to schedule or manually trigger the Python scripts (for example with an Azure Container App job or GitHub Actions workflow) whenever catalogue updates or credential refreshes are required.
+
+## Continuous Delivery
+
+Pushing to `development` or `main` kicks off the **Build and Publish Container** workflow located at `.github/workflows/container.yml`. The job uses Docker Buildx with the GitHub Actions cache to build the `runner` stage and push the resulting image to `ghcr.io/carservicewalekolkata/csw-admin`, tagging it with the branch name and commit SHA automatically. Provide any required secrets (for example `MONGODB_URI`) as repository or environment secrets if you extend the workflow to run database migrations or other scripts.
 
 ## Additional Notes
 

@@ -8,22 +8,26 @@ x-csw-env: &csw-env
   SUPER_USER_PASSWORD: ${SUPER_USER_PASSWORD:?Set SUPER_USER_PASSWORD in your environment}
   PORT: ${PORT:-3000}
 
+x-runner-build: &runner-build
+  context: .
+  target: runner
+  cache_from:
+    - type=local,src=.docker/cache
+  cache_to:
+    - type=local,dest=.docker/cache,mode=max
+
 services:
   admin-app:
-    image: ghcr.io/jabotics/csw-admin:latest
-    build:
-      context: .
-      target: runner
+    image: ghcr.io/carservicewalekolkata/csw-admin:latest
+    build: *runner-build
     environment: *csw-env
     ports:
       - "${PORT:-3000}:3000"
     restart: unless-stopped
 
   scripts:
-    image: ghcr.io/jabotics/csw-admin:latest
-    build:
-      context: .
-      target: runner
+    image: ghcr.io/carservicewalekolkata/csw-admin:latest
+    build: *runner-build
     entrypoint: ["sleep", "infinity"]
     environment: *csw-env
     profiles: ["scripts"]
