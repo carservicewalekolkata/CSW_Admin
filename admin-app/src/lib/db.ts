@@ -1,7 +1,5 @@
 import mongoose, { type ConnectOptions } from "mongoose";
 
-const mongoUri = getRequiredEnv("MONGODB_URI");
-
 type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -23,6 +21,7 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
   }
 
   if (!cache.promise) {
+    const mongoUri = getRequiredEnv("MONGODB_URI");
     const dbName = process.env.MONGODB_DB ?? process.env.DB_CSW_NAME;
     const options = {
       bufferCommands: false,
@@ -48,7 +47,6 @@ export async function disconnectFromDatabase(): Promise<void> {
 
 function getRequiredEnv(key: keyof NodeJS.ProcessEnv): string {
   const value = process.env[key];
-
   if (!value) {
     throw new Error(`Missing ${key} environment variable`);
   }

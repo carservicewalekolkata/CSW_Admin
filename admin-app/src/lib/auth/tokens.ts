@@ -19,36 +19,36 @@ type TokenPayload = {
   tokenVersion: number;
 };
 
-const secrets: TokenSecrets = {
-  access: getRequiredEnv("JWT_SECRET"),
-  refresh: getRequiredEnv("JWT_REFRESH_SECRET"),
-  reset: getRequiredEnv("JWT_RESET_SECRET"),
-};
-
 export type { TokenPayload };
 
 export async function signAccessToken(payload: TokenPayload, ttlSeconds = accessTokenTtlSeconds): Promise<string> {
-  return signToken(payload, ttlSeconds, secrets.access);
+  const { access } = getTokenSecrets();
+  return signToken(payload, ttlSeconds, access);
 }
 
 export async function signRefreshToken(payload: TokenPayload, ttlSeconds = refreshTokenTtlSeconds): Promise<string> {
-  return signToken(payload, ttlSeconds, secrets.refresh);
+  const { refresh } = getTokenSecrets();
+  return signToken(payload, ttlSeconds, refresh);
 }
 
 export async function signResetToken(payload: Pick<TokenPayload, "sub" | "email" | "tokenVersion">, ttlSeconds = resetTokenTtlSeconds): Promise<string> {
-  return signToken({ ...payload, roles: [] }, ttlSeconds, secrets.reset);
+  const { reset } = getTokenSecrets();
+  return signToken({ ...payload, roles: [] }, ttlSeconds, reset);
 }
 
 export async function verifyAccessToken<T extends JWTPayload = JWTPayload>(token: string): Promise<T> {
-  return verifyToken<T>(token, secrets.access);
+  const { access } = getTokenSecrets();
+  return verifyToken<T>(token, access);
 }
 
 export async function verifyRefreshToken<T extends JWTPayload = JWTPayload>(token: string): Promise<T> {
-  return verifyToken<T>(token, secrets.refresh);
+  const { refresh } = getTokenSecrets();
+  return verifyToken<T>(token, refresh);
 }
 
 export async function verifyResetToken<T extends JWTPayload = JWTPayload>(token: string): Promise<T> {
-  return verifyToken<T>(token, secrets.reset);
+  const { reset } = getTokenSecrets();
+  return verifyToken<T>(token, reset);
 }
 
 function getRequiredEnv(key: keyof NodeJS.ProcessEnv): string {
@@ -77,4 +77,18 @@ async function signToken(payload: TokenPayload, ttlSeconds: number, secret: stri
 async function verifyToken<T extends JWTPayload>(token: string, secret: string): Promise<T> {
   const { payload } = await jwtVerify(token, encoder.encode(secret));
   return payload as T;
+}
+
+let cachedTokenSecrets: TokenSecrets | null = null;
+
+function getTokenSecrets(): TokenSecrets {
+  if (!cachedTokenSecrets) {
+    cachedTokenSecrets = {
+      access: getRequiredEnv("JWT_SECRET"),
+      refresh: getRequiredEnv("JWT_REFRESH_SECRET"),
+      reset: getRequiredEnv("JWT_RESET_SECRET"),
+    };
+  }
+
+  return cachedTokenSecrets;
 }
