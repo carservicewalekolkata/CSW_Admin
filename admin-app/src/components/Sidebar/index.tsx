@@ -7,17 +7,15 @@ import Image from 'next/image'
 
 import {
   HiMiniSquares2X2,
-  HiOutlineBriefcase,
   HiOutlineCog6Tooth,
-  HiOutlineHome,
   HiOutlineArrowRightOnRectangle,
   HiOutlineChevronRight,
   HiOutlineMoon,
-  HiOutlineUserGroup,
 } from 'react-icons/hi2'
-import { TbLayoutSidebarLeftCollapse } from "react-icons/tb";
-import { FaRegBell } from "react-icons/fa";
+import { TbLayoutSidebarLeftCollapse, TbDatabaseEdit } from "react-icons/tb";
+import { FaRegBell, FaCar } from "react-icons/fa";
 import { RiDeleteBin5Line } from "react-icons/ri";
+import { MdOutlineLocalLaundryService } from "react-icons/md";
 
 type SidebarProps = {
   user: {
@@ -42,6 +40,7 @@ type PrimaryNavItem = {
   href?: string
   patterns?: string[]
   secondary: SecondaryNavItem[]
+  danger?: boolean
 }
 
 type AccountAction = {
@@ -58,7 +57,7 @@ const NAVIGATION: PrimaryNavItem[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
-    icon: HiOutlineHome,
+    icon: HiMiniSquares2X2,
     href: '/dashboard',
     patterns: ['/dashboard'],
     secondary: [
@@ -77,96 +76,65 @@ const NAVIGATION: PrimaryNavItem[] = [
     ],
   },
   {
-    id: 'catalogue',
-    label: 'Catalogue',
-    icon: HiMiniSquares2X2,
-    patterns: ['/catalogue'],
+    id: 'cars',
+    label: 'Cars',
+    icon: FaCar,
+    patterns: ['/cars'],
     secondary: [
       {
         id: 'brands',
-        label: 'Brand library',
-        description: 'Create and manage the OEM catalogue.',
-        href: '/catalogue/brands',
+        label: 'Car Brands',
+        description: 'Display all the brands.',
+        href: '/cars/brands',
       },
       {
         id: 'models',
-        label: 'Model matrix',
-        description: 'Map vehicle models to their parent brands.',
-        href: '/catalogue/models',
-      },
-      {
-        id: 'services',
-        label: 'Service packages',
-        description: 'Curate pricing, upsells, and bundled offerings.',
-        href: '/catalogue/services',
+        label: 'Car Models',
+        description: 'Display all the models.',
+        href: '/cars/models',
       },
     ],
   },
   {
-    id: 'operations',
-    label: 'Operations',
-    icon: HiOutlineBriefcase,
-    patterns: ['/operations'],
+    id: 'services',
+    label: 'Services',
+    icon: MdOutlineLocalLaundryService,
+    patterns: ['/services'],
     secondary: [
       {
-        id: 'bookings',
-        label: 'Bookings',
-        description: 'Monitor active jobs and assignment statuses.',
-        href: '/operations/bookings',
+        id: 'service-category',
+        label: 'Service Category',
+        description: 'Displays all the service categories.',
+        href: '/services/category',
       },
       {
-        id: 'workshops',
-        label: 'Workshops',
-        description: 'Manage partner workshops and capacity.',
-        href: '/operations/workshops',
+        id: 'service-details',
+        label: 'Service Details',
+        description: 'Displays details of each services.',
+        href: '/services/details',
       },
     ],
   },
   {
-    id: 'customers',
-    label: 'Customers',
-    icon: HiOutlineUserGroup,
-    patterns: ['/customers'],
-    secondary: [
-      {
-        id: 'accounts',
-        label: 'Accounts',
-        description: 'View customer records and contact details.',
-        href: '/customers/accounts',
-      },
-      {
-        id: 'feedback',
-        label: 'Feedback',
-        description: 'Track CSAT trends and follow ups.',
-        href: '/customers/feedback',
-      },
-    ],
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    icon: HiOutlineCog6Tooth,
-    patterns: ['/settings'],
+    id: 'seed',
+    label: 'Seed Data',
+    icon: TbDatabaseEdit,
+    patterns: ['/seed'],
     secondary: [
       {
         id: 'users',
         label: 'Users & roles',
         description: 'Invite teammates and manage permissions.',
-        href: '/settings/users',
+        href: '/seed/users',
       },
       {
-        id: 'integrations',
-        label: 'Integrations',
-        description: 'Configure external services and automations.',
-        href: '/settings/integrations',
-      },
-      {
-        id: 'audit',
-        label: 'Audit trail',
-        description: 'Review configuration changes over time.',
-        href: '/settings/audit-log',
+        id: 'data-fetch',
+        label: 'Data Fetch',
+        description: 'Fetch Data from different car vendors.',
+        href: '/seed/data-fetch',
       },
     ],
+    danger: true
   },
 ]
 
@@ -387,10 +355,14 @@ const Sidebar = ({ user, children }: SidebarProps) => {
                   key={item.id}
                   type="button"
                   className={classNames(
-                    'flex h-8 w-8 items-center justify-center rounded-3xl text-sm font-medium transition-all hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80',
+                    'flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 hover:-translate-y-0.5',
                     isActive
-                      ? 'bg-white text-brand-600 shadow-xl'
-                      : 'bg-white/80 text-brand-600/60 hover:bg-white/80 hover:text-brand-600/90',
+                      ? item.danger
+                        ? 'bg-red-600 text-white shadow-lg hover:bg-red-700'
+                        : 'bg-white text-brand-600 shadow-lg hover:bg-white/95'
+                      : item.danger
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200 hover:shadow-md'
+                        : 'bg-white/70 text-brand-600/60 hover:bg-white hover:text-brand-600 hover:shadow-md',
                   )}
                   onClick={() => {
                     setActiveSection(item.id)
@@ -586,9 +558,14 @@ const Sidebar = ({ user, children }: SidebarProps) => {
         </div>
 
         <div className="mt-auto border-t border-brand-100/60 px-4 py-3 text-xs text-muted-500">
-          <div className='hover:bg-white/30 rounded-lg h-12 border border-brand-200 cursor-pointer px-3 flex items-center gap-3'>
-            <RiDeleteBin5Line size={20} color='black' />
-            <p className='text-black text-lg'>Trash</p>
+          <div className="group hover:bg-white/30 bg-white/50 rounded-lg h-12 cursor-pointer px-3 flex items-center gap-2 transition-all">
+            <RiDeleteBin5Line
+              size={20}
+              className="text-gray-500 transition-colors group-hover:text-rose-800"
+            />
+            <p className="text-gray-500 text-lg transition-colors group-hover:text-rose-800">
+              Trash
+            </p>
           </div>
         </div>
       </aside>
