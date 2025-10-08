@@ -70,7 +70,6 @@ jobs:
       contents: read
       id-token: write
     environment: manual-approval
-    secrets: inherit
     steps:
       - uses: azure/login@v2
         with:
