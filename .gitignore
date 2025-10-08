@@ -47,3 +47,5 @@ next-env.d.ts
 /admin-app/public/assets/images/models
 /admin-app/public/assets/services
 /admin-app/public/assets/services_cache.json
+
+container.yml

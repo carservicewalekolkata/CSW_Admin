@@ -1,0 +1,77 @@
+name: Deploy Staging (Manual Swap for Public Live)
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag to deploy"
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: carservicewalekolkata/csw-admin
+  IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag || 'staging' }}
+  RESOURCE_GROUP: cswapp-rg
+  CONTAINERAPP_ENV: csw-admin-env
+  CONTAINERAPP_NAME: csw-admin-prod
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runner
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-22.04
+    environment: manual-approval
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+      - name: Deploy to Azure (Public Live)
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          imageToDeploy: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          resourceGroup: ${{ env.RESOURCE_GROUP }}
+          containerAppEnvironment: ${{ env.CONTAINERAPP_ENV }}
+          containerAppName: ${{ env.CONTAINERAPP_NAME }}
+          targetPort: 3000
+          ingress: external
+          environmentVariables: |
+            NODE_ENV=production
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
+            DB_CSW_NAME=${{ secrets.DB_CSW_NAME }}
+            GOMECHANIC_BEARER_TOKEN=${{ secrets.GOMECHANIC_BEARER_TOKEN }}
+            SUPER_USER_MAIL=${{ secrets.SUPER_USER_MAIL }}
+            SUPER_USER_PASSWORD=${{ secrets.SUPER_USER_PASSWORD }}
+            COOKIE_NAME=${{ secrets.COOKIE_NAME }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_REFRESH_SECRET=${{ secrets.JWT_REFRESH_SECRET }}
+            JWT_RESET_SECRET=${{ secrets.JWT_RESET_SECRET }}
