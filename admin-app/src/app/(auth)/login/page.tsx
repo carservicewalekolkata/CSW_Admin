@@ -7,7 +7,8 @@ import LoginForm from '@/modules/LoginPageClient'
 
 export default async function LoginPage() {
   const cookieStore = await cookies()
-  const token = cookieStore.get(process.env.COOKIE_NAME!)?.value
+  const cookieName = process.env.COOKIE_NAME || 'app_session'
+  const token = cookieStore.get(cookieName)?.value
 
   if (token) {
     try {

@@ -8,7 +8,8 @@ import ForgotPasswordForm from '@/modules/ForgotPasswordForm'
 
 export default async function ForgotPasswordPage() {
   const cookieStore = await cookies()
-  const token = cookieStore.get(process.env.COOKIE_NAME!)?.value
+  const cookieName = process.env.COOKIE_NAME || 'app_session'
+  const token = cookieStore.get(cookieName)?.value
 
   if (token) {
     try {
