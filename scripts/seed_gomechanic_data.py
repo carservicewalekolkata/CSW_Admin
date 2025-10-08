@@ -4,7 +4,7 @@ import re
 import requests
 import threading
 import concurrent.futures as ThreadManager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 from datetime import datetime, UTC
 
@@ -16,12 +16,36 @@ from pymongo import MongoClient, ReturnDocument
 from gridfs import GridFS
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+ADMIN_APP_PUBLIC_DIR = PROJECT_ROOT / "admin-app" / "public"
+PUBLIC_ASSETS_DIR = ADMIN_APP_PUBLIC_DIR / "assets"
+PUBLIC_ASSETS_RELATIVE = PurePosixPath("assets")
+ASSETS_MODELS_DIR = PUBLIC_ASSETS_DIR / "images" / "models"
+ASSETS_MODELS_RELATIVE = PUBLIC_ASSETS_RELATIVE / "images" / "models"
+BATTERY_SERVICES_DIR = PUBLIC_ASSETS_DIR / "services" / "batteries"
+BATTERY_SERVICES_RELATIVE = PUBLIC_ASSETS_RELATIVE / "services" / "batteries"
+SERVICES_CACHE_PATH = PUBLIC_ASSETS_DIR / "services_cache.json"
+
+
+def resolve_public_asset_path(relative_path):
+  """
+  Resolve a relative asset path like 'assets/...' to the admin app public directory.
+  Handles already-absolute paths by returning them unchanged.
+  """
+  candidate = Path(relative_path)
+  if candidate.is_absolute():
+    return candidate
+  relative_parts = PurePosixPath(str(relative_path)).parts
+  return ADMIN_APP_PUBLIC_DIR.joinpath(*relative_parts)
+
+
 def _load_environment():
   """Load optional .env files for local use without overriding host environment."""
   env_loaded = False
-  script_dir = Path(__file__).resolve().parent
-  project_root = script_dir.parent
-  admin_app_dir = project_root / "admin-app"
+  script_dir = SCRIPT_DIR
+  project_root = PROJECT_ROOT
+  admin_app_dir = ADMIN_APP_PUBLIC_DIR.parent
 
   for base_dir in (script_dir, project_root, admin_app_dir):
     if not base_dir.exists():
@@ -66,10 +90,6 @@ CATEGORY_LABELS = {
   "16": "Denting and Painting",
   "37": "Detailing",
 }
-
-ASSETS_MODELS_DIR = Path("assets").joinpath("images", "models")
-BATTERY_SERVICES_DIR = Path("assets").joinpath("services", "batteries")
-SERVICES_CACHE_PATH = Path("assets").joinpath("services_cache.json")
 
 client = MongoClient(MONGODB_URI)
 
@@ -628,12 +648,12 @@ class CSW:
       service_part = self._sanitize_filename(service_name, "battery-service")
       filename = f"{service_part}{suffix}"
       local_path = BATTERY_SERVICES_DIR.joinpath(filename)
-      relative_path = str(local_path.as_posix())
+      relative_path = (BATTERY_SERVICES_RELATIVE / filename).as_posix()
 
       with battery_thumbnail_lock:
         cached_path = battery_thumbnail_cache.get(service_part)
       if cached_path:
-        cached_file = Path(cached_path)
+        cached_file = resolve_public_asset_path(cached_path)
         try:
           if cached_file.exists() and cached_file.stat().st_size > 0:
             return cached_path
@@ -1072,7 +1092,7 @@ class CSW:
             temp_path = local_path.with_suffix(f"{local_path.suffix}.tmp")
             temp_path.write_bytes(image_resp.content)
             temp_path.replace(local_path)
-            image_relative_path = str(local_path.as_posix())
+            image_relative_path = (ASSETS_MODELS_RELATIVE / file_name).as_posix()
           except Exception as err:
             log(f"[!] Failed to download image for model {model.get('name')} ({model_id}): {err}")
 
@@ -1081,6 +1101,8 @@ class CSW:
         if old_image_path and image_relative_path and old_image_path != image_relative_path:
           try:
             old_path = Path(old_image_path)
+            if not old_path.is_absolute():
+              old_path = resolve_public_asset_path(old_image_path)
             if old_path.exists():
               old_path.unlink()
               log(f"[i] Removed previous image for model id {model_id}")

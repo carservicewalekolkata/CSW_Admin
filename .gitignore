@@ -42,3 +42,8 @@ scripts/.venv/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dev
+/admin-app/public/assets/images/models
+/admin-app/public/assets/services
+/admin-app/public/assets/services_cache.json

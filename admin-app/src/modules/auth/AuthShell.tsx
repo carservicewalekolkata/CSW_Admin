@@ -15,7 +15,7 @@ const AuthShell = ({ title, description, footer, children }: AuthShellProps) => 
         <div className="space-y-6">
           <Image
             priority
-            src="/assets/brand/logo-horizontal.svg"
+            src="/assets/logo/logo-horizontal.svg"
             alt="CSW Admin"
             width={164}
             height={48}
