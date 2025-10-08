@@ -1,7 +1,19 @@
 import type { ApiEndpoints } from "@/types";
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3000/api";
+const normalizeBaseUrl = (value: string | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/\/+$/, "");
+};
+
+const backendUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BACKEND_URL) ?? "/api";
 const authBasePath = "/auth";
 // const usersBasePath = "/users";
 
