@@ -85,7 +85,7 @@ jobs:
           containerAppName: ${{ env.CONTAINERAPP_NAME }}
           targetPort: 3000
           ingress: external
-          environmentVariables: |
+          environmentVariables: >
             NODE_ENV=production
             MONGODB_URI=${{ secrets.MONGODB_URI }}
             DB_CSW_NAME=${{ secrets.DB_CSW_NAME }}
