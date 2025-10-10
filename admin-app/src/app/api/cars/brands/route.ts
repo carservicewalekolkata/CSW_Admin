@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { revalidateTag, unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
