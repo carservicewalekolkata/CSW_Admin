@@ -38,6 +38,7 @@ const Table = <T,>({
   isLoading = false,
 }: TableProps<T>) => {
   const hasRows = data.length > 0
+  const skeletonRowCount = Math.max(1, Math.min(3, hasRows ? data.length : 3))
 
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/60 shadow-sm backdrop-blur">
@@ -56,13 +57,24 @@ const Table = <T,>({
           </tr>
         </thead>
         <tbody className="divide-y divide-brand-100/40 bg-white/50">
-          {isLoading && (
-            <tr>
-              <td colSpan={columns.length} className={`${baseCellClasses} text-center text-brand-500`}>
-                Loading data…
-              </td>
-            </tr>
-          )}
+          {isLoading
+            ? Array.from({ length: skeletonRowCount }).map((_, rowIndex) => (
+                <tr key={`skeleton-${rowIndex}`} className="animate-pulse">
+                  {columns.map((column, columnIndex) => (
+                    <td
+                      key={`skeleton-${rowIndex}-${String(column.key)}`}
+                      className={`${baseCellClasses} ${column.className ?? ''}`}
+                    >
+                      <div
+                        className={`h-4 w-full rounded-full bg-brand-100/80 ${
+                          columnIndex === 0 ? 'max-w-[140px]' : columnIndex === columns.length - 1 ? 'max-w-[80px]' : ''
+                        }`}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            : null}
 
           {!isLoading && hasRows
             ? data.map((row, index) => {
