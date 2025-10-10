@@ -1,7 +1,9 @@
-export default function DashboardPage() {
+const DashboardPage = () => {
   return (
-    <div className="space-y-8">
+    <div>
       
     </div>
   )
 }
+
+export default DashboardPage
