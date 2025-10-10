@@ -1,5 +1,9 @@
 import mongoose, { type ConnectOptions } from "mongoose";
 
+// It tells Mongoose not to silently filter documents that don’t match schema types exactly
+mongoose.set("strictQuery", false);
+mongoose.Promise = global.Promise;
+
 type MongooseCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;

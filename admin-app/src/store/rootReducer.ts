@@ -5,10 +5,11 @@ import { persistReducer } from "redux-persist";
 import type { AuthState } from "@/types/auth";
 
 import { authPersistConfig, rootPersistConfig } from "./persist";
-import { authReducer, uiReducer } from "./slices";
+import { authReducer, brandsReducer, uiReducer } from "./slices";
 
 const combinedReducer = combineReducers({
   auth: persistReducer<AuthState>(authPersistConfig, authReducer),
+  brands: brandsReducer,
   ui: uiReducer,
 });
 
