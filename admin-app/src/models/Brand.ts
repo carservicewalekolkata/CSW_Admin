@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Schema, Document, Connection } from "mongoose";
 import { getMongooseModelForConnection } from "@/utils/getMongooseModelForConnection";
 
