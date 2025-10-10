@@ -2,3 +2,5 @@ export * from "./api";
 export * from "./auth";
 export * from "./brands";
 export * from "./ui";
+export * from "./models";
+export * from "./serviceCategories";

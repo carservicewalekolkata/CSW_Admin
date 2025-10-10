@@ -1,8 +1,7 @@
+import ServiceCategoriesPageClient from '@/modules/Services/ServiceCategories/ServiceCategoriesPageClient'
 
 const ServicesCategoryPage = () => {
-  return (
-    <div>ServicesCategoryPage</div>
-  )
+  return <ServiceCategoriesPageClient />
 }
 
 export default ServicesCategoryPage

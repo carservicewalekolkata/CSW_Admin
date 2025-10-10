@@ -1,8 +1,7 @@
+import ModelsPageClient from '@/modules/Cars/Models/ModelsPageClient'
 
-const CarModelPage = () => {
-  return (
-    <div>CarModelPage</div>
-  )
+const CarModelsPage = () => {
+  return <ModelsPageClient />
 }
 
-export default CarModelPage
+export default CarModelsPage

@@ -14,7 +14,7 @@ export function getMongooseModelForConnection<T extends Document>(
   const models = connection.models as Record<string, Model<T>>;
 
   if (models[name]) {
-    delete models[name];
+    return models[name];
   }
 
   return connection.model<T>(name, schemaFactory(), collection);
