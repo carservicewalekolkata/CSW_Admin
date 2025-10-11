@@ -1,4 +1,7 @@
-# CSW Admin
+# CSW Admin  
+
+[![Deploy Development](https://github.com/carservicewalekolkata/CSW_Admin/actions/workflows/deploy-development.yml/badge.svg?branch=development)](https://github.com/carservicewalekolkata/CSW_Admin/actions/workflows/deploy-development.yml)
+[![Deploy Staging](https://github.com/carservicewalekolkata/CSW_Admin/actions/workflows/deploy-staging.yml/badge.svg?branch=staging)](https://github.com/carservicewalekolkata/CSW_Admin/actions/workflows/deploy-staging.yml)
 
 Next.js admin panel for Car Service Wale with dedicated Python data-management scripts. The repository is now split into a frontend application bundle and a reusable script toolkit that ships inside the production container image.
 
