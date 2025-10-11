@@ -17,6 +17,8 @@ const backendUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BACKEND_URL) ?? "/ap
 const apiVersion = "/v1";
 const authBasePath = `${apiVersion}/auth`;
 // const usersBasePath = "/users";
+const adminBasePath = `${apiVersion}/admin`;
+const rolesBasePath = `${adminBasePath}/roles`;
 
 export const APIEndpoint: ApiEndpoints = {
   BackendUrl: backendUrl,
@@ -27,6 +29,13 @@ export const APIEndpoint: ApiEndpoints = {
     refresh: `${authBasePath}/refresh`,
     status: `${authBasePath}/status`,
     forgotPassword: `${authBasePath}/forgot-password`,
+  },
+  admin: {
+    superUser: `${adminBasePath}/super-user`,
+    roles: {
+      base: rolesBasePath,
+      detail: (id) => `${rolesBasePath}/${id}`,
+    },
   },
   // users: {
   //   base: usersBasePath,
