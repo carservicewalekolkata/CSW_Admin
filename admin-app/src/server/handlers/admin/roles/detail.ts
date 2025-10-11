@@ -1,4 +1,5 @@
 import { Types } from 'mongoose'
+import type { NextRequest } from 'next/server'
 
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
@@ -14,8 +15,8 @@ const isValidObjectId = (value: unknown): value is string => {
   return Types.ObjectId.isValid(value)
 }
 
-export const PATCH = async (request: Request, context: { params?: { id?: string } }) => {
-  const id = context.params?.id ?? ''
+export const PATCH = async (request: NextRequest, context: { params: Promise<{ id: string }> }) => {
+  const { id } = await context.params
 
   if (!isValidObjectId(id)) {
     return versionedJson(
@@ -122,8 +123,8 @@ export const PATCH = async (request: Request, context: { params?: { id?: string 
   }
 }
 
-export const DELETE = async (_request: Request, context: { params?: { id?: string } }) => {
-  const id = context.params?.id ?? ''
+export const DELETE = async (_request: NextRequest, context: { params: Promise<{ id: string }> }) => {
+  const { id } = await context.params
 
   if (!isValidObjectId(id)) {
     return versionedJson(
