@@ -3,10 +3,17 @@ import type { ModelQuery, ModelResponse } from '@/types/models'
 
 const buildUrl = (query?: ModelQuery) => {
   const base = APIEndpoint.BackendUrl || '/api'
+  const versionPrefix = APIEndpoint.VersionPrefix || '/v1'
   const isAbsolute = /^https?:/i.test(base)
-  const url = isAbsolute
-    ? new URL('/cars/models', base)
-    : new URL(`${base.replace(/\/$/, '')}/cars/models`, 'http://localhost')
+  const sanitizedBase = base.replace(/\/+$/, '')
+  const normalizedVersion = (versionPrefix.startsWith('/') ? versionPrefix : `/${versionPrefix}`).replace(
+    /\/+$/,
+    '',
+  )
+  const resourcePath = `${normalizedVersion}/cars/models`
+  const target = `${sanitizedBase}${resourcePath}`
+  const relativeTarget = target.startsWith('/') ? target : `/${target}`
+  const url = isAbsolute ? new URL(target) : new URL(relativeTarget, 'http://localhost')
 
   if (query) {
     if (query.search) url.searchParams.set('search', query.search)

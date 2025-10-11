@@ -9,10 +9,10 @@ const secret = new TextEncoder().encode(process.env.JWT_SECRET)
 const publicPaths = [
   '/login',
   '/forgot-password',
-  '/api/auth/login',
-  '/api/auth/forgot-password',
-  '/api/auth/status',
-  '/api/auth/refresh',
+  '/api/v1/auth/login',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/status',
+  '/api/v1/auth/refresh',
 ];
 
 export async function middleware(req: NextRequest) {

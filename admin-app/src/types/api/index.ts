@@ -13,6 +13,7 @@ export interface UserEndpointConfig {
 
 export interface ApiEndpoints {
   BackendUrl: string;
+  VersionPrefix: string;
   auth: AuthEndpointConfig;
   // users: UserEndpointConfig;
 }

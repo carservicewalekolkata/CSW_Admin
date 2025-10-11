@@ -14,11 +14,13 @@ const normalizeBaseUrl = (value: string | undefined): string | null => {
 };
 
 const backendUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BACKEND_URL) ?? "/api";
-const authBasePath = "/auth";
+const apiVersion = "/v1";
+const authBasePath = `${apiVersion}/auth`;
 // const usersBasePath = "/users";
 
 export const APIEndpoint: ApiEndpoints = {
   BackendUrl: backendUrl,
+  VersionPrefix: apiVersion,
   auth: {
     login: `${authBasePath}/login`,
     logout: `${authBasePath}/logout`,

@@ -3,10 +3,17 @@ import type { ServiceCategoryQuery, ServiceCategoryResponse } from '@/types/serv
 
 const buildUrl = (query?: ServiceCategoryQuery) => {
   const base = APIEndpoint.BackendUrl || '/api'
+  const versionPrefix = APIEndpoint.VersionPrefix || '/v1'
   const isAbsolute = /^https?:/i.test(base)
-  const url = isAbsolute
-    ? new URL('/cars/service-categories', base)
-    : new URL(`${base.replace(/\/?$/, '')}/cars/service-categories`, 'http://localhost')
+  const sanitizedBase = base.replace(/\/+$/, '')
+  const normalizedVersion = (versionPrefix.startsWith('/') ? versionPrefix : `/${versionPrefix}`).replace(
+    /\/+$/,
+    '',
+  )
+  const resourcePath = `${normalizedVersion}/services/service-category`
+  const target = `${sanitizedBase}${resourcePath}`
+  const relativeTarget = target.startsWith('/') ? target : `/${target}`
+  const url = isAbsolute ? new URL(target) : new URL(relativeTarget, 'http://localhost')
 
   if (query) {
     if (query.search) url.searchParams.set('search', query.search)
