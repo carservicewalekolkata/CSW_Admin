@@ -65,7 +65,7 @@ const Sidebar = ({ user, children }: SidebarProps) => {
 
   const handleLogout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetch('/api/v1/auth/logout', { method: 'POST' })
     } catch (error) {
       console.error('Failed to log out', error)
     } finally {

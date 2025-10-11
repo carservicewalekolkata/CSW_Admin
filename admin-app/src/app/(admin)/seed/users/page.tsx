@@ -1,8 +1,7 @@
+import SeedUsersModule from '@/modules/SeedUsers'
 
-const SeedUsersAndRolesPage = () => {
-  return (
-    <div>SeedUsersAndRolesPage</div>
-  )
+const SeedUsersPage = () => {
+  return <SeedUsersModule />
 }
 
-export default SeedUsersAndRolesPage
+export default SeedUsersPage

@@ -6,13 +6,17 @@ export interface AuthEndpointConfig {
   forgotPassword: string;
 }
 
-export interface UserEndpointConfig {
-  base: string;
-  detail: (id: string | number) => string;
+export interface AdminEndpointConfig {
+  superUser: string;
+  roles: {
+    base: string;
+    detail: (id: string) => string;
+  };
 }
 
 export interface ApiEndpoints {
   BackendUrl: string;
+  VersionPrefix: string;
   auth: AuthEndpointConfig;
-  // users: UserEndpointConfig;
+  admin: AdminEndpointConfig;
 }

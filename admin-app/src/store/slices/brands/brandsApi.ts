@@ -3,10 +3,17 @@ import type { BrandQuery, BrandResponse } from '@/types/brands'
 
 const buildUrl = (query?: BrandQuery) => {
   const base = APIEndpoint.BackendUrl || '/api'
+  const versionPrefix = APIEndpoint.VersionPrefix || '/v1'
   const isAbsolute = /^https?:/i.test(base)
-  const url = isAbsolute
-    ? new URL('/cars/brands', base)
-    : new URL(`${base.replace(/\/?$/, '')}/cars/brands`, 'http://localhost')
+  const sanitizedBase = base.replace(/\/+$/, '')
+  const normalizedVersion = (versionPrefix.startsWith('/') ? versionPrefix : `/${versionPrefix}`).replace(
+    /\/+$/,
+    '',
+  )
+  const resourcePath = `${normalizedVersion}/cars/brands`
+  const target = `${sanitizedBase}${resourcePath}`
+  const relativeTarget = target.startsWith('/') ? target : `/${target}`
+  const url = isAbsolute ? new URL(target) : new URL(relativeTarget, 'http://localhost')
 
   if (query) {
     if (query.search) url.searchParams.set('search', query.search)
