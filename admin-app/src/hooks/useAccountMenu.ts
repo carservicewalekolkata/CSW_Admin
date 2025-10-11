@@ -9,7 +9,7 @@ type UseAccountMenuArgs = {
 export const useAccountMenu = ({ watchValue }: UseAccountMenuArgs = {}) => {
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const timeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const openRef = useRef(false)
 
   const [mounted, setMounted] = useState(false)
@@ -18,9 +18,9 @@ export const useAccountMenu = ({ watchValue }: UseAccountMenuArgs = {}) => {
   const close = useCallback(() => {
     setOpen(false)
     if (timeoutRef.current) {
-      window.clearTimeout(timeoutRef.current)
+      clearTimeout(timeoutRef.current)
     }
-    timeoutRef.current = window.setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       setMounted(false)
       timeoutRef.current = null
     }, 200)
@@ -28,7 +28,7 @@ export const useAccountMenu = ({ watchValue }: UseAccountMenuArgs = {}) => {
 
   const openMenu = useCallback(() => {
     if (timeoutRef.current) {
-      window.clearTimeout(timeoutRef.current)
+      clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
     setMounted(true)
@@ -91,7 +91,7 @@ export const useAccountMenu = ({ watchValue }: UseAccountMenuArgs = {}) => {
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
-        window.clearTimeout(timeoutRef.current)
+        clearTimeout(timeoutRef.current)
       }
     }
   }, [])

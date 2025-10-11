@@ -1,31 +1,52 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Types } from "mongoose";
 import { GridFSBucket } from "mongodb";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  context: RouteContext<"/api/cars/brands/icon/[id]">
+): Promise<NextResponse<unknown>> {
   try {
+    const { id } = await context.params;
+
     const mongooseInstance = await connectToDatabase();
     const db = mongooseInstance.connection.db;
     if (!db) throw new Error("No active DB connection");
 
-    const fileId = params.id;
-    if (!Types.ObjectId.isValid(fileId)) {
-      return NextResponse.json({ success: false, message: "Invalid file ID" }, { status: 400 });
+    if (!Types.ObjectId.isValid(id)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid file ID" },
+        { status: 400 }
+      );
     }
 
     const bucket = new GridFSBucket(db, { bucketName: "fs" });
-    const objectId = new Types.ObjectId(fileId);
+    const objectId = new Types.ObjectId(id);
 
     const fileDoc = await db.collection("fs.files").findOne({ _id: objectId });
     if (!fileDoc) {
-      return NextResponse.json({ success: false, message: "File not found" }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: "File not found" },
+        { status: 404 }
+      );
     }
 
-    const contentType = fileDoc.contentType || "image/png";
-    const chunks: Buffer[] = [];
+    // --- Detect content type automatically
+    const filename = fileDoc.filename || "";
+    const contentType =
+      fileDoc.contentType ||
+      (filename.endsWith(".jpg") || filename.endsWith(".jpeg")
+        ? "image/jpeg"
+        : filename.endsWith(".webp")
+        ? "image/webp"
+        : filename.endsWith(".png")
+        ? "image/png"
+        : "application/octet-stream");
 
+    // --- Stream file
+    const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
       const stream = bucket.openDownloadStream(objectId);
       stream.on("data", (chunk) => chunks.push(chunk));
