@@ -1,8 +1,7 @@
+import ServiceDetailsPageClient from "@/modules/Services/ServiceDetails/ServiceDetailsPageClient"
 
 const ServicesDetailsPage = () => {
-  return (
-    <div>ServicesDetailsPage</div>
-  )
+  return <ServiceDetailsPageClient />
 }
 
 export default ServicesDetailsPage
