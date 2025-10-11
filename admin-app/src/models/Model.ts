@@ -1,9 +1,9 @@
-import { Schema, Document, Connection } from "mongoose";
+import { Schema, Document, Connection, Types } from "mongoose";
 
 import { getMongooseModelForConnection } from "@/utils/getMongooseModelForConnection";
 
 export interface IModelService {
-  services_id: mongoose.Types.ObjectId;
+  services_id: Types.ObjectId;
   discount: number;
   original_price: number;
   discount_price: number;
@@ -12,7 +12,7 @@ export interface IModelService {
 export interface IModel extends Document {
   id: number;
   name: string;
-  thumbnail: mongoose.Types.ObjectId | null;
+  thumbnail: Types.ObjectId | null;
   image: string;
   body_type?: string | null;
   brand_id: number;
