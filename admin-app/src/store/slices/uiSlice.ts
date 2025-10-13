@@ -33,4 +33,4 @@ const uiSlice = createSlice({
 
 export const { setTheme, showModal, enqueueToast, removeToast, clearToasts } = uiSlice.actions;
 
-export const uiReducer = uiSlice.reducer;
+export default uiSlice.reducer;

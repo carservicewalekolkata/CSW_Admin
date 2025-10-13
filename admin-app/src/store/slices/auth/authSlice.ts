@@ -80,4 +80,4 @@ export const {
   resetAuthState,
 } = authSlice.actions;
 
-export const authReducer = authSlice.reducer;
+export default authSlice.reducer;

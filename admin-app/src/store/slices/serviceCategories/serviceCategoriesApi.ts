@@ -1,101 +1,69 @@
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
 import type { ServiceCategoryQuery, ServiceCategoryResponse } from '@/types/serviceCategories'
 
-const buildUrl = (query?: ServiceCategoryQuery) => {
-  const base = APIEndpoint.BackendUrl || '/api'
-  const versionPrefix = APIEndpoint.VersionPrefix || '/v1'
-  const isAbsolute = /^https?:/i.test(base)
-  const sanitizedBase = base.replace(/\/+$/, '')
-  const normalizedVersion = (versionPrefix.startsWith('/') ? versionPrefix : `/${versionPrefix}`).replace(
-    /\/+$/,
-    '',
-  )
-  const resourcePath = `${normalizedVersion}/services/service-category`
-  const target = `${sanitizedBase}${resourcePath}`
-  const relativeTarget = target.startsWith('/') ? target : `/${target}`
-  const url = isAbsolute ? new URL(target) : new URL(relativeTarget, 'http://localhost')
+const baseUrl = APIEndpoint.BackendUrl
+const serviceCategoriesPath = APIEndpoint.services.servicesCategory
 
-  if (query) {
-    if (query.search) url.searchParams.set('search', query.search)
-    if (query.sortUpdated) url.searchParams.set('sortUpdated', query.sortUpdated)
-    if (query.page) url.searchParams.set('page', String(query.page))
-    if (query.limit) url.searchParams.set('limit', String(query.limit))
-  }
-
-  return isAbsolute ? url.toString() : `${url.pathname}${url.search}`
-}
-
-export async function fetchServiceCategories(query: ServiceCategoryQuery = {}): Promise<ServiceCategoryResponse> {
-  const response = await fetch(buildUrl(query), {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
+export const serviceCategoriesApi = createApi({
+  reducerPath: 'serviceCategoriesApi',
+  baseQuery: fetchBaseQuery({
+    baseUrl,
+    prepareHeaders: (headers) => {
+      headers.set('Accept', 'application/json')
+      return headers
     },
-    cache: 'no-store',
-  })
+  }),
+  tagTypes: ['ServiceCategories'],
+  endpoints: (builder) => ({
+    /**
+     * GET /services/service-category
+     */
+    fetchServiceCategories: builder.query<ServiceCategoryResponse, ServiceCategoryQuery | void>({
+      query: (query) => {
+        const params = new URLSearchParams()
 
-  if (!response.ok) {
-    throw new Error(`Unable to fetch service categories (status ${response.status})`)
-  }
+        if (query?.search) params.set('search', query.search)
+        if (query?.sortUpdated) params.set('sortUpdated', query.sortUpdated)
+        if (query?.page) params.set('page', String(query.page))
+        if (query?.limit) params.set('limit', String(query.limit))
 
-  const payload = (await response.json()) as ServiceCategoryResponse
-  return payload
-}
+        return {
+          url: `${serviceCategoriesPath}?${params.toString()}`,
+          method: 'GET',
+        }
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map(({ id }) => ({
+                type: 'ServiceCategories' as const,
+                id,
+              })),
+              { type: 'ServiceCategories', id: 'LIST' },
+            ]
+          : [{ type: 'ServiceCategories', id: 'LIST' }],
+    }),
 
-export async function deleteServiceCategory(id: number): Promise<void> {
-  const response = await fetch(buildUrl(), {
-    method: 'DELETE',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ id }),
-  })
+    /**
+     * DELETE /services/service-category
+     */
+    deleteServiceCategory: builder.mutation<void, number>({
+      query: (id) => ({
+        url: `${serviceCategoriesPath}`,
+        method: 'DELETE',
+        body: { id },
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'ServiceCategories', id },
+        { type: 'ServiceCategories', id: 'LIST' },
+      ],
+    }),
+  }),
+})
 
-  if (!response.ok) {
-    throw new Error(`Unable to delete service category (status ${response.status})`)
-  }
-}
-
-export async function createServiceCategory(name: string) {
-  const response = await fetch(buildUrl(), {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Unable to create service category (status ${response.status})`)
-  }
-
-  const payload = (await response.json()) as { data?: ServiceCategoryResponse['data'][number] }
-  return payload.data
-}
-
-export async function updateServiceCategory(id: number, name: string) {
-  const response = await fetch(buildUrl(), {
-    method: 'PATCH',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ id, name }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Unable to update service category (status ${response.status})`)
-  }
-
-  const payload = (await response.json()) as { data?: ServiceCategoryResponse['data'][number] }
-  return payload.data
-}
-
-export const serviceCategoriesApi = {
-  fetchServiceCategories,
-  createServiceCategory,
-  updateServiceCategory,
-  deleteServiceCategory,
-}
+export const {
+  useFetchServiceCategoriesQuery,
+  useLazyFetchServiceCategoriesQuery,
+  useDeleteServiceCategoryMutation,
+} = serviceCategoriesApi
