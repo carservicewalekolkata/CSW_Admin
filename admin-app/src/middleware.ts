@@ -5,26 +5,32 @@ import { jwtVerify } from 'jose'
 const cookieName = process.env.COOKIE_NAME || 'app_session'
 const secret = new TextEncoder().encode(process.env.JWT_SECRET)
 
-// routes allowed without a token
-const publicPaths = [
+const AUTH_WHITELIST = [
   '/login',
   '/forgot-password',
-  '/api/auth/login',
-  '/api/auth/forgot-password',
-  '/api/auth/status',
-  '/api/auth/refresh',
-];
+  '/api/v1/auth/login',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/status',
+  '/api/v1/auth/refresh',
+]
+
+const PROTECTED_PREFIXES = ['/dashboard']
+
+const isWhitelisted = (pathname: string) =>
+  AUTH_WHITELIST.some((path) => pathname.startsWith(path))
+
+const isProtectedPath = (pathname: string) =>
+  PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  if (publicPaths.some(path => pathname.startsWith(path))) {
+  if (isWhitelisted(pathname) || !isProtectedPath(pathname)) {
     return NextResponse.next()
   }
 
   const token = req.cookies.get(cookieName)?.value
 
-  // Block access immediately when the visitor has no auth cookie.
   if (!token) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
@@ -33,7 +39,6 @@ export async function middleware(req: NextRequest) {
     await jwtVerify(token, secret)
     return NextResponse.next()
   } catch {
-    // A bad token should be removed so the user can start a clean session.
     const res = NextResponse.redirect(new URL('/login', req.url))
     res.cookies.delete(cookieName)
     return res
@@ -41,5 +46,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next|.*\\..*).*)'], // all routes except static
+  matcher: ['/((?!_next|.*\\..*).*)'],
 }

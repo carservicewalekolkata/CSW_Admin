@@ -4,58 +4,53 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import { FaCircle } from 'react-icons/fa'
+import { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 
-import { authApi, AuthApiError } from '@/store/slices/auth/authApi'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { setRememberMe } from '@/store/slices/auth/authSlice'
 import {
-  loginFailed,
-  loginRequested,
-  loginSucceeded,
-  setRememberMe,
-} from '@/store/slices/auth/authSlice'
+  useLoginMutation,
+  useCheckDatabaseConnectionQuery,
+} from '@/store/slices/auth/authApi'
 
 type DatabaseStatus = 'checking' | 'ready' | 'unreachable'
 
 const LoginForm = () => {
-  const dispatch = useAppDispatch()
   const router = useRouter()
-  const { status, error: authError, rememberMe } = useAppSelector((state) => state.auth)
+  const dispatch = useAppDispatch()
+
+  const { error: authError, rememberMe } = useAppSelector(
+    (state) => state.auth,
+  )
+
   const [formError, setFormError] = useState<string | null>(null)
-  const [databaseStatus, setDatabaseStatus] = useState<DatabaseStatus>('checking')
-  const [dbMessage, setDbMessage] = useState<string | null>(null)
+
+  // ✅ RTK Query hooks
+  const [login, { isLoading: isSubmitting, isSuccess, error: loginError }] =
+    useLoginMutation()
+  const {
+    data: dbStatusData,
+    isLoading: isCheckingDb,
+    isError: dbError,
+  } = useCheckDatabaseConnectionQuery()
+
+  const databaseStatus: DatabaseStatus = isCheckingDb
+    ? 'checking'
+    : dbError
+      ? 'unreachable'
+      : dbStatusData?.connected
+        ? 'ready'
+        : 'unreachable'
+
+  const dbMessage =
+    databaseStatus === 'unreachable'
+      ? dbStatusData?.message ||
+      'Unable to confirm the database connection. You can still try to log in.'
+      : null
 
   useEffect(() => {
-    let isMounted = true
-
-    authApi
-      .checkDatabaseConnection()
-      .then((isConnected) => {
-        if (!isMounted) return
-        setDatabaseStatus(isConnected ? 'ready' : 'unreachable')
-        setDbMessage(
-          isConnected ? null : 'Unable to confirm the database connection. You can still try to log in.',
-        )
-      })
-      .catch((error) => {
-        if (!isMounted) return
-        const message =
-          error instanceof AuthApiError
-            ? error.message
-            : 'Unable to connect to the database. Please try again later.'
-        setDatabaseStatus('unreachable')
-        setDbMessage(message)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (status === 'authenticated') {
-      router.push('/dashboard')
-    }
-  }, [router, status])
+    if (isSuccess) router.push('/dashboard')
+  }, [isSuccess, router])
 
   const handleRememberChange = (event: ChangeEvent<HTMLInputElement>) => {
     dispatch(setRememberMe(event.target.checked))
@@ -63,6 +58,7 @@ const LoginForm = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setFormError(null)
 
     const formData = new FormData(event.currentTarget)
     const email = (formData.get('email') as string | null)?.trim() ?? ''
@@ -73,32 +69,39 @@ const LoginForm = () => {
       return
     }
 
-    dispatch(loginRequested({ email }))
-    setFormError(null)
-
     try {
-      const { user, accessToken } = await authApi.login({
-        email,
-        password,
-        remember: rememberMe,
-      })
+      await login({ email, password, remember: rememberMe }).unwrap()
+    } catch (err) {
+      let message = 'Unable to log in. Please try again.'
 
-      dispatch(loginSucceeded({ user, token: accessToken }))
-    } catch (error) {
-      const message =
-        error instanceof AuthApiError
-          ? error.message
-          : 'Unable to log in. Please try again.'
+      // ✅ Type-safe error narrowing for RTK Query
+      if (typeof err === 'object' && err !== null) {
+        const e = err as FetchBaseQueryError | { message?: string }
+        if ('data' in e && e.data && typeof e.data === 'object' && 'message' in e.data) {
+          message = String((e.data as { message: string }).message)
+        } else if ('message' in e && typeof e.message === 'string') {
+          message = e.message
+        }
+      }
+
       setFormError(message)
-      dispatch(loginFailed(message))
     }
   }
 
-  const isSubmitting = status === 'loading'
-  const isCheckingDb = databaseStatus === 'checking'
   const buttonDisabled = isSubmitting || isCheckingDb
   const buttonLabel = isSubmitting ? 'Signing in...' : 'Log in'
-  const errorMessage = formError ?? authError
+  const errorMessage =
+    formError ||
+    (loginError
+      ? 'data' in loginError
+        ? (loginError.data as { message?: string })?.message ?? null
+        : 'error' in loginError
+          ? loginError.error
+          : 'message' in loginError
+            ? loginError.message
+            : null
+      : null) ||
+    authError
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-body">
@@ -122,7 +125,10 @@ const LoginForm = () => {
           <label htmlFor="password">
             Password<span className="text-brand-500">*</span>
           </label>
-          <Link href="/forgot-password" className="text-sm font-semibold text-brand-600 hover:text-brand-500">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-semibold text-brand-600 hover:text-brand-500"
+          >
             Forgot password?
           </Link>
         </div>
@@ -149,7 +155,9 @@ const LoginForm = () => {
           />
           Remember me
         </label>
-        <span className="flex items-center gap-1 text-xs text-muted-400">Secure <FaCircle size={3} /> Encrypted</span>
+        <span className="flex items-center gap-1 text-xs text-muted-400">
+          Secure <FaCircle size={3} /> Encrypted
+        </span>
       </div>
 
       {databaseStatus === 'checking' && (

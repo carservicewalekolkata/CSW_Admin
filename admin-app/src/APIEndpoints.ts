@@ -1,24 +1,16 @@
 import type { ApiEndpoints } from "@/types";
 
-const normalizeBaseUrl = (value: string | undefined): string | null => {
-  if (!value) {
-    return null;
-  }
+const backendUrl = "/api";
 
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
+const apiVersion = "/v1";
 
-  return trimmed.replace(/\/+$/, "");
-};
-
-const backendUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BACKEND_URL) ?? "/api";
-const authBasePath = "/auth";
-// const usersBasePath = "/users";
+const authBasePath = `${apiVersion}/auth`;
+const adminBasePath = `${apiVersion}/admin`;
+const rolesBasePath = `${adminBasePath}/roles`;
 
 export const APIEndpoint: ApiEndpoints = {
   BackendUrl: backendUrl,
+
   auth: {
     login: `${authBasePath}/login`,
     logout: `${authBasePath}/logout`,
@@ -26,8 +18,20 @@ export const APIEndpoint: ApiEndpoints = {
     status: `${authBasePath}/status`,
     forgotPassword: `${authBasePath}/forgot-password`,
   },
-  // users: {
-  //   base: usersBasePath,
-  //   detail: (id) => `${usersBasePath}/${id}`,
-  // },
+
+  admin: {
+    superUser: `${adminBasePath}/super-user`,
+    roles: {
+      base: rolesBasePath,
+      detail: (id) => `${rolesBasePath}/${id}`,
+    },
+  },
+  cars: {
+    brands: `${apiVersion}/cars/brands`,
+    models: `${apiVersion}/cars/models`,
+  },
+  services: {
+    servicesCategory: `${apiVersion}/services/service-category`,
+    servicesDetails: `${apiVersion}/services/details`,
+  },
 };

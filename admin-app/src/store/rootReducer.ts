@@ -1,27 +1,46 @@
-import { combineReducers } from "@reduxjs/toolkit";
-import type { PersistConfig } from "redux-persist";
-import { persistReducer } from "redux-persist";
+import { combineReducers } from '@reduxjs/toolkit'
+import type { PersistConfig } from 'redux-persist'
+import { persistReducer } from 'redux-persist'
 
-import type { AuthState } from "@/types/auth";
+import type { AuthState } from '@/types/auth'
+import {
+  authReducer,
+  brandsReducer,
+  modelsReducer,
+  serviceCategoriesReducer,
+  servicesReducer,
+  uiReducer,
+  authApi,
+  brandsApi,
+  modelsApi,
+  serviceCategoriesApi,
+  servicesApi,
+} from './slices'
 
-import { authPersistConfig, rootPersistConfig } from "./persist";
-import { authReducer, brandsReducer, modelsReducer, serviceCategoriesReducer, uiReducer } from "./slices";
+import { authPersistConfig, rootPersistConfig } from './persist'
 
 const combinedReducer = combineReducers({
   auth: persistReducer<AuthState>(authPersistConfig, authReducer),
   brands: brandsReducer,
   models: modelsReducer,
+  services: servicesReducer,
   serviceCategories: serviceCategoriesReducer,
   ui: uiReducer,
-});
 
-export const rootReducer = combinedReducer;
+  // ✅ Add RTK Query API reducers
+  [authApi.reducerPath]: authApi.reducer,
+  [brandsApi.reducerPath]: brandsApi.reducer,
+  [modelsApi.reducerPath]: modelsApi.reducer,
+  [serviceCategoriesApi.reducerPath]: serviceCategoriesApi.reducer,
+  [servicesApi.reducerPath]: servicesApi.reducer,
+})
 
-export type RootState = ReturnType<typeof combinedReducer>;
+export const rootReducer = combinedReducer
+export type RootState = ReturnType<typeof combinedReducer>
 
-const typedRootPersistConfig = rootPersistConfig as PersistConfig<RootState>;
+const typedRootPersistConfig = rootPersistConfig as PersistConfig<RootState>
 
 export const persistedReducer = persistReducer<RootState>(
   typedRootPersistConfig,
   combinedReducer,
-);
+)

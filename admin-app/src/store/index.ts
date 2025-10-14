@@ -1,4 +1,4 @@
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore } from '@reduxjs/toolkit'
 import {
   FLUSH,
   PAUSE,
@@ -6,23 +6,36 @@ import {
   PURGE,
   REGISTER,
   REHYDRATE,
-} from "redux-persist";
+} from 'redux-persist'
 
-import { persistedReducer } from "./rootReducer";
-export type { RootState } from "./rootReducer";
+import { persistedReducer } from './rootReducer'
+import {
+  authApi,
+  brandsApi,
+  modelsApi,
+  serviceCategoriesApi,
+  servicesApi,
+} from './slices'
 
-export const makeStore = () => {
-  return configureStore({
+export type { RootState } from './rootReducer'
+
+export const makeStore = () =>
+  configureStore({
     reducer: persistedReducer,
-    devTools: process.env.NODE_ENV !== "production",
+    devTools: process.env.NODE_ENV !== 'production',
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: {
           ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
         },
-      }),
-  });
-};
+      }).concat(
+        authApi.middleware,
+        brandsApi.middleware,
+        modelsApi.middleware,
+        serviceCategoriesApi.middleware,
+        servicesApi.middleware,
+      ),
+  })
 
-export type AppStore = ReturnType<typeof makeStore>;
-export type AppDispatch = AppStore["dispatch"];
+export type AppStore = ReturnType<typeof makeStore>
+export type AppDispatch = AppStore['dispatch']

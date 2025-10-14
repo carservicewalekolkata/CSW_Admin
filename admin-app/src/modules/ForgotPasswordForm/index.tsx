@@ -2,7 +2,10 @@
 
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 
-import { authApi, AuthApiError } from '@/store/slices/auth/authApi'
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
+import type { SerializedError } from '@reduxjs/toolkit'
+
+import { authApi } from '@/store/slices/auth/authApi'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import {
   passwordResetFailed,
@@ -34,14 +37,18 @@ const ForgotPasswordForm = () => {
     dispatch(passwordResetRequested())
     setLocalError(null)
 
+    const resetRequest = dispatch(
+      authApi.endpoints.requestPasswordReset.initiate({ email: trimmedEmail }),
+    )
+
     try {
-      const response = await authApi.requestPasswordReset({ email: trimmedEmail })
+      const response = await resetRequest.unwrap()
       dispatch(passwordResetSucceeded(response.message))
     } catch (error) {
-      const message =
-        error instanceof AuthApiError
-          ? error.message
-          : 'Unable to send the reset link right now. Please try again later.'
+      const message = extractErrorMessage(
+        error,
+        'Unable to send the reset link right now. Please try again later.',
+      )
       setLocalError(message)
       dispatch(passwordResetFailed(message))
     }
@@ -100,3 +107,38 @@ const ForgotPasswordForm = () => {
 }
 
 export default ForgotPasswordForm
+
+function extractErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (typeof error === 'string' && error.trim()) {
+    return error
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  const fetchError = error as FetchBaseQueryError | SerializedError | undefined
+  if (fetchError) {
+    if ('status' in fetchError) {
+      const data = (fetchError as FetchBaseQueryError).data
+      if (typeof data === 'string' && data.trim()) {
+        return data
+      }
+      if (data && typeof data === 'object' && 'message' in data) {
+        const maybeMessage = (data as { message?: unknown }).message
+        if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+          return maybeMessage
+        }
+      }
+    }
+
+    if ('message' in fetchError && typeof fetchError.message === 'string' && fetchError.message.trim()) {
+      return fetchError.message
+    }
+  }
+
+  return fallback
+}
