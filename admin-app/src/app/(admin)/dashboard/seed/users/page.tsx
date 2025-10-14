@@ -1,7 +1,7 @@
 import SeedUsersModule from '@/modules/SeedUsers'
 
-const SeedUsersPage = () => {
+const DashboardSeedUsersPage = () => {
   return <SeedUsersModule />
 }
 
-export default SeedUsersPage
+export default DashboardSeedUsersPage

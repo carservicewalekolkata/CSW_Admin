@@ -5,6 +5,7 @@ import { Types } from 'mongoose'
 
 import { withApiVersion, versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
+import { applyCors, corsPreflight } from '@/server/cors'
 
 type IconRouteContext =
   | { params: { id: string } }
@@ -16,7 +17,7 @@ const resolveParams = async (context: IconRouteContext) => {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: IconRouteContext,
 ): Promise<NextResponse<unknown>> {
   try {
@@ -71,13 +72,17 @@ export async function GET(
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
-    return withApiVersion(response)
+    return applyCors(request, withApiVersion(response))
   } catch (err: any) {
     console.error('❌ Error fetching GridFS file:', err)
-    return versionedJson(
-      { success: false, message: err.message },
-      { status: 500 },
+    return applyCors(
+      request,
+      versionedJson(
+        { success: false, message: err.message },
+        { status: 500 },
+      ),
     )
   }
 }
 
+export const OPTIONS = (request: NextRequest) => corsPreflight(request)

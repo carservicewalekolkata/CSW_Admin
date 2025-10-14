@@ -1,1 +1,1 @@
-export { GET, POST, PATCH, DELETE } from '@/server/handlers/services/serviceCategory'
+export { GET, POST, PATCH, DELETE, OPTIONS } from '@/server/handlers/services/serviceCategory'

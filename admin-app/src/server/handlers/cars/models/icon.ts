@@ -4,6 +4,7 @@ import { Types } from 'mongoose'
 
 import { withApiVersion, versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
+import { applyCors, corsPreflight } from '@/server/cors'
 
 type IconRouteContext =
   | { params: { id: string } }
@@ -15,7 +16,7 @@ const resolveParams = async (context: IconRouteContext) => {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: IconRouteContext,
 ) {
   try {
@@ -58,11 +59,15 @@ export async function GET(
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })
-    return withApiVersion(response)
+    return applyCors(request, withApiVersion(response))
   } catch (error: unknown) {
     console.error('❌ Error fetching model thumbnail:', error)
     const message = error instanceof Error ? error.message : 'Unable to fetch file'
-    return versionedJson({ success: false, message }, { status: 500 })
+    return applyCors(
+      request,
+      versionedJson({ success: false, message }, { status: 500 }),
+    )
   }
 }
 
+export const OPTIONS = (request: NextRequest) => corsPreflight(request)

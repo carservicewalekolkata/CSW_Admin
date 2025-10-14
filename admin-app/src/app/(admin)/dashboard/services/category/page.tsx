@@ -1,7 +1,7 @@
 import ServiceCategoriesPageClient from '@/modules/Services/ServiceCategories/ServiceCategoriesPageClient'
 
-const ServicesCategoryPage = () => {
+const DashboardServicesCategoryPage = () => {
   return <ServiceCategoriesPageClient />
 }
 
-export default ServicesCategoryPage
+export default DashboardServicesCategoryPage

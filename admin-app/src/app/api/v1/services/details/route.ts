@@ -1,1 +1,1 @@
-export { GET } from '@/server/handlers/services/serviceDetails'
+export { GET, OPTIONS } from '@/server/handlers/services/serviceDetails'

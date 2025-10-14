@@ -4,6 +4,7 @@ import { revalidateTag, unstable_cache } from 'next/cache'
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
 import { getBrandModel } from '@/models'
+import { applyCors, corsPreflight } from '@/server/cors'
 
 type RawBrand = {
   id: number
@@ -159,33 +160,39 @@ export async function GET(request: Request) {
       }
     })
 
-    return versionedJson(
-      {
-        success: true,
-        count: normalizedData.length,
-        total,
-        page: query.page,
-        limit: query.limit,
-        cacheKey,
-        timestamp: new Date().toISOString(),
-        data: normalizedData,
-      },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=60',
+    return applyCors(
+      request,
+      versionedJson(
+        {
+          success: true,
+          count: normalizedData.length,
+          total,
+          page: query.page,
+          limit: query.limit,
+          cacheKey,
+          timestamp: new Date().toISOString(),
+          data: normalizedData,
         },
-      },
+        {
+          headers: {
+            'Cache-Control': 'public, max-age=60',
+          },
+        },
+      ),
     )
   } catch (error: any) {
     console.error('❌ Error in /api/v1/cars/brands:', error)
 
-    return versionedJson(
-      {
-        success: false,
-        message: error.message || 'Internal Server Error',
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 },
+    return applyCors(
+      request,
+      versionedJson(
+        {
+          success: false,
+          message: error.message || 'Internal Server Error',
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      ),
     )
   }
 }
@@ -244,3 +251,4 @@ export async function DELETE(request: Request) {
   }
 }
 
+export const OPTIONS = (request: Request) => corsPreflight(request)

@@ -1,8 +1,7 @@
-
 import BrandsPageClient from '@/modules/Cars/Brands/BrandsPageClient'
 
-const CarsBrandsPage = () => {
+const DashboardCarsBrandsPage = () => {
   return <BrandsPageClient />
 }
 
-export default CarsBrandsPage
+export default DashboardCarsBrandsPage
