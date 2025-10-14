@@ -1,6 +1,7 @@
 import { revalidateTag, unstable_cache } from 'next/cache'
 
 import { versionedJson } from '@/server/apiVersion'
+import { applyCors, corsPreflight } from '@/server/cors'
 import { connectToDatabase } from '@/lib/db'
 import { getServiceCategoryModel } from '@/models'
 import type { ServiceCategory } from '@/types/serviceCategories'
@@ -108,34 +109,40 @@ export const GET = async (request: Request) => {
       updated_date: normalizeDate(item.updated_date),
     }))
 
-    return versionedJson(
-      {
-        success: true,
-        count: data.length,
-        total,
-        page: query.page,
-        limit: query.limit,
-        cacheKey,
-        timestamp: new Date().toISOString(),
-        data,
-      },
-      {
-        headers: {
-          'Cache-Control': 'public, max-age=60',
+    return applyCors(
+      request,
+      versionedJson(
+        {
+          success: true,
+          count: data.length,
+          total,
+          page: query.page,
+          limit: query.limit,
+          cacheKey,
+          timestamp: new Date().toISOString(),
+          data,
         },
-      },
+        {
+          headers: {
+            'Cache-Control': 'public, max-age=60',
+          },
+        },
+      ),
     )
   } catch (error: unknown) {
     console.error('❌ Error in /api/v1/services/service-category:', error)
     const message = error instanceof Error ? error.message : 'Internal Server Error'
 
-    return versionedJson(
-      {
-        success: false,
-        message,
-        timestamp: new Date().toISOString(),
-      },
-      { status: 500 },
+    return applyCors(
+      request,
+      versionedJson(
+        {
+          success: false,
+          message,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      ),
     )
   }
 }
@@ -201,6 +208,8 @@ export const POST = async (request: Request) => {
     return versionedJson({ success: false, message }, { status: 500 })
   }
 }
+
+export const OPTIONS = (request: Request) => corsPreflight(request)
 
 export const PATCH = async (request: Request) => {
   try {
@@ -319,4 +328,3 @@ export const DELETE = async (request: Request) => {
     return versionedJson({ success: false, message }, { status: 500 })
   }
 }
-

@@ -1,4 +1,3 @@
-
 const DashboardActivityPage = () => {
   return (
     <div>DashboardActivityPage</div>

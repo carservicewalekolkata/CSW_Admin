@@ -1,15 +1,8 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
-
+import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import type { Model, ModelQuery, ModelResponse } from '@/types/models'
-
 import { modelsApi } from './modelsApi'
 
-type ModelsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
-
-type FetchModelsResult = {
-  response: ModelResponse
-  query: ModelQuery
-}
+export type ModelsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
 export interface ModelsState {
   items: Model[]
@@ -21,7 +14,7 @@ export interface ModelsState {
   lastQuery: ModelQuery
 }
 
-export const initialModelsState: ModelsState = {
+const initialState: ModelsState = {
   items: [],
   status: 'idle',
   error: null,
@@ -36,84 +29,69 @@ export const initialModelsState: ModelsState = {
   },
 }
 
-export const fetchModels = createAsyncThunk<
-  FetchModelsResult,
-  ModelQuery | undefined,
-  { rejectValue: string }
->('models/fetchAll', async (query = {}, { rejectWithValue }) => {
-  try {
-    const data = await modelsApi.fetchModels(query)
-    return { response: data, query }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch models'
-    return rejectWithValue(message)
-  }
-})
-
-export const deleteModel = createAsyncThunk('models/delete', async (slug: string) => {
-  await modelsApi.deleteModel(slug)
-  return slug
-})
-
 const modelsSlice = createSlice({
   name: 'models',
-  initialState: initialModelsState,
+  initialState,
   reducers: {
     clearModels(state) {
-      Object.assign(state, initialModelsState)
+      Object.assign(state, initialState)
+    },
+    setLastQuery(state, action: PayloadAction<Partial<ModelQuery>>) {
+      state.lastQuery = { ...state.lastQuery, ...action.payload }
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchModels.pending, (state) => {
+      .addMatcher(modelsApi.endpoints.fetchModels.matchPending, (state) => {
         state.status = 'loading'
         state.error = null
       })
-      .addCase(fetchModels.fulfilled, (state, action) => {
-        const payload = action.payload as FetchModelsResult | undefined
-        if (!payload) {
-          state.status = 'succeeded'
-          state.error = null
-          return
-        }
+      .addMatcher(modelsApi.endpoints.fetchModels.matchFulfilled, (state, { payload, meta }) => {
+        const query = meta?.arg?.originalArgs as ModelQuery | undefined
+        const response = payload as ModelResponse
 
-        const { response, query } = payload
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = typeof response.total === 'number' ? response.total : 0
-        state.page = typeof response.page === 'number' ? response.page : 1
-        state.limit = typeof response.limit === 'number' ? response.limit : 10
+        state.total = response.total ?? 0
+        state.page = response.page ?? 1
+        state.limit = response.limit ?? 10
         state.status = 'succeeded'
         state.error = null
+
         state.lastQuery = {
           page: state.page,
           limit: state.limit,
-          sortStatus: query.sortStatus ?? 'none',
-          sortUpdated: query.sortUpdated ?? 'desc',
-          search: query.search,
-          slug: query.slug,
-          brand: query.brand,
-          bodyType: query.bodyType,
-          fuel: query.fuel,
+          sortStatus: query?.sortStatus ?? 'none',
+          sortUpdated: query?.sortUpdated ?? 'desc',
+          search: query?.search,
+          slug: query?.slug,
+          brand: query?.brand,
+          bodyType: query?.bodyType,
+          fuel: query?.fuel,
         }
       })
-      .addCase(fetchModels.rejected, (state, action) => {
+      .addMatcher(modelsApi.endpoints.fetchModels.matchRejected, (state, { error }) => {
         state.status = 'failed'
-        state.error = (action.payload as string) ?? action.error.message ?? 'Failed to load models'
+        state.error = error?.message ?? 'Failed to fetch models'
       })
-      .addCase(deleteModel.pending, (state) => {
+      .addMatcher(modelsApi.endpoints.deleteModel.matchPending, (state) => {
         state.error = null
       })
-      .addCase(deleteModel.fulfilled, (state, action) => {
-        state.items = state.items.filter((model) => model.slug !== action.payload)
-        state.total = Math.max(0, state.total - 1)
+      .addMatcher(modelsApi.endpoints.deleteModel.matchFulfilled, (state, { meta }) => {
+        const slug = meta?.arg?.originalArgs as string
+        if (slug) {
+          state.items = state.items.filter((m) => m.slug !== slug)
+          state.total = Math.max(0, state.total - 1)
+        }
         state.status = 'succeeded'
       })
-      .addCase(deleteModel.rejected, (state, action) => {
+      .addMatcher(modelsApi.endpoints.deleteModel.matchRejected, (state, { error }) => {
         state.status = 'failed'
-        state.error = action.error.message ?? 'Failed to delete model'
+        state.error = error?.message ?? 'Failed to delete model'
       })
   },
 })
 
-export const { clearModels } = modelsSlice.actions
-export const modelsReducer = modelsSlice.reducer
+export const { useFetchModelsQuery, useLazyFetchModelsQuery, useDeleteModelMutation } = modelsApi
+export const usePrefetchModels = () => modelsApi.usePrefetch('fetchModels')
+export const { clearModels, setLastQuery } = modelsSlice.actions
+export default modelsSlice.reducer

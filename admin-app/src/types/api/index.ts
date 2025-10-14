@@ -1,4 +1,4 @@
-export interface AuthEndpointConfig {
+interface AuthEndpointConfig {
   login: string;
   logout: string;
   refresh: string;
@@ -6,7 +6,7 @@ export interface AuthEndpointConfig {
   forgotPassword: string;
 }
 
-export interface AdminEndpointConfig {
+interface AdminEndpointConfig {
   superUser: string;
   roles: {
     base: string;
@@ -14,9 +14,20 @@ export interface AdminEndpointConfig {
   };
 }
 
+interface Cars {
+  brands: string
+  models: string
+}
+
+interface Services {
+  servicesCategory: string
+  servicesDetails: string
+}
+
 export interface ApiEndpoints {
   BackendUrl: string;
-  VersionPrefix: string;
   auth: AuthEndpointConfig;
   admin: AdminEndpointConfig;
+  cars: Cars;
+  services: Services;
 }

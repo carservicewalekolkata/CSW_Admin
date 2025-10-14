@@ -1,27 +1,20 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
-
+import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import type { Service, ServiceQuery, ServiceResponse } from '@/types/services'
-
 import { servicesApi } from './servicesApi'
 
-type ServicesStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
+export type ServicesStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
-type FetchServicesResult = {
-  response: ServiceResponse
-  query: ServiceQuery
-}
-
-export interface ServiceDetailsState {
+export interface ServicesState {
   items: Service[]
   status: ServicesStatus
   error: string | null
   total: number
   page: number
   limit: number
-  lastQuery: ServiceQuery & { page?: number; limit?: number }
+  lastQuery: ServiceQuery
 }
 
-export const initialServiceDetailsState: ServiceDetailsState = {
+const initialState: ServicesState = {
   items: [],
   status: 'idle',
   error: null,
@@ -35,74 +28,52 @@ export const initialServiceDetailsState: ServiceDetailsState = {
   },
 }
 
-export const fetchServices = createAsyncThunk<FetchServicesResult, ServiceQuery | undefined, { rejectValue: string }>(
-  'services/fetchAll',
-  async (query = {}, { rejectWithValue }) => {
-    try {
-      const data = await servicesApi.fetchServices(query)
-      return { response: data, query }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Failed to fetch services'
-      return rejectWithValue(message)
-    }
-  },
-)
-
 const servicesSlice = createSlice({
   name: 'services',
-  initialState: initialServiceDetailsState,
+  initialState,
   reducers: {
     clearServices(state) {
-      state.items = []
-      state.status = 'idle'
-      state.error = null
-      state.total = 0
-      state.page = 1
-      state.limit = 10
-      state.lastQuery = {
-        page: 1,
-        limit: 10,
-        sortUpdated: 'desc',
-      }
+      Object.assign(state, initialState)
+    },
+    setLastQuery(state, action: PayloadAction<Partial<ServiceQuery>>) {
+      state.lastQuery = { ...state.lastQuery, ...action.payload }
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchServices.pending, (state) => {
+      // --- Fetch Services ---
+      .addMatcher(servicesApi.endpoints.fetchServices.matchPending, (state) => {
         state.status = 'loading'
         state.error = null
       })
-      .addCase(fetchServices.fulfilled, (state, action) => {
-        const payload = action.payload as FetchServicesResult | undefined
+      .addMatcher(servicesApi.endpoints.fetchServices.matchFulfilled, (state, { payload, meta }) => {
+        const query = meta?.arg?.originalArgs as ServiceQuery | undefined
+        const response = payload as ServiceResponse
 
-        if (!payload) {
-          state.status = 'succeeded'
-          state.error = null
-          return
-        }
-
-        const { response, query } = payload
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = typeof response.total === 'number' ? response.total : 0
-        state.page = typeof response.page === 'number' ? response.page : 1
-        state.limit = typeof response.limit === 'number' ? response.limit : 10
+        state.total = response.total ?? 0
+        state.page = response.page ?? 1
+        state.limit = response.limit ?? 10
         state.status = 'succeeded'
         state.error = null
+
         state.lastQuery = {
           page: state.page,
           limit: state.limit,
-          sortUpdated: query.sortUpdated ?? 'desc',
-          search: query.search,
-          category: query.category,
-          status: query.status,
+          sortUpdated: query?.sortUpdated ?? 'desc',
+          search: query?.search,
+          category: query?.category,
+          status: query?.status,
         }
       })
-      .addCase(fetchServices.rejected, (state, action) => {
+      .addMatcher(servicesApi.endpoints.fetchServices.matchRejected, (state, { error }) => {
         state.status = 'failed'
-        state.error = (action.payload as string) ?? action.error.message ?? 'Failed to load services'
+        state.error = error?.message ?? 'Failed to fetch services'
       })
   },
 })
 
-export const { clearServices } = servicesSlice.actions
-export const servicesReducer = servicesSlice.reducer
+export const { useFetchServicesQuery, useLazyFetchServicesQuery } = servicesApi
+export const usePrefetchServices = () => servicesApi.usePrefetch('fetchServices')
+export const { clearServices, setLastQuery } = servicesSlice.actions
+export default servicesSlice.reducer

@@ -1,1 +1,1 @@
-export { GET, DELETE } from '@/server/handlers/cars/brands'
+export { GET, DELETE, OPTIONS } from '@/server/handlers/cars/brands'

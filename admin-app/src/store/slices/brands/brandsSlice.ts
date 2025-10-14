@@ -1,10 +1,8 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
-
+import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import type { Brand, BrandQuery, BrandResponse } from '@/types/brands'
-
 import { brandsApi } from './brandsApi'
 
-type BrandsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
+export type BrandsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 
 export interface BrandsState {
   items: Brand[]
@@ -31,98 +29,66 @@ const initialState: BrandsState = {
   },
 }
 
-type FetchBrandsResult = {
-  response: BrandResponse
-  query: BrandQuery
-}
-
-export const fetchBrands = createAsyncThunk<
-  FetchBrandsResult,
-  BrandQuery | undefined,
-  { rejectValue: string }
->('brands/fetchAll', async (query = {}, { rejectWithValue }) => {
-  try {
-    const data = await brandsApi.fetchBrands(query)
-    return { response: data, query }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch brands'
-    return rejectWithValue(message)
-  }
-})
-
-export const deleteBrand = createAsyncThunk('brands/delete', async (slug: string) => {
-  await brandsApi.deleteBrand(slug)
-  return slug
-})
-
 const brandsSlice = createSlice({
   name: 'brands',
   initialState,
   reducers: {
     clearBrands(state) {
-      state.items = []
-      state.status = 'idle'
-      state.error = null
-      state.total = 0
-      state.page = 1
-      state.limit = 10
-      state.lastQuery = {
-        page: 1,
-        limit: 10,
-        sortStatus: 'none',
-        sortUpdated: 'desc',
-      }
+      Object.assign(state, initialState)
+    },
+    setLastQuery(state, action: PayloadAction<Partial<BrandQuery>>) {
+      state.lastQuery = { ...state.lastQuery, ...action.payload }
     },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchBrands.pending, (state) => {
+      .addMatcher(brandsApi.endpoints.fetchBrands.matchPending, (state) => {
         state.status = 'loading'
         state.error = null
       })
-      .addCase(fetchBrands.fulfilled, (state, action) => {
-        const payload = action.payload as FetchBrandsResult | undefined
+      .addMatcher(brandsApi.endpoints.fetchBrands.matchFulfilled, (state, { payload, meta }) => {
+        const query = meta?.arg?.originalArgs as BrandQuery | undefined
+        const response = payload as BrandResponse
 
-        if (!payload) {
-          state.status = 'succeeded'
-          state.error = null
-          return
-        }
-
-        const { response, query } = payload
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = typeof response.total === 'number' ? response.total : 0
-        state.page = typeof response.page === 'number' ? response.page : 1
-        state.limit = typeof response.limit === 'number' ? response.limit : 10
+        state.total = response.total ?? 0
+        state.page = response.page ?? 1
+        state.limit = response.limit ?? 10
         state.status = 'succeeded'
         state.error = null
+
         state.lastQuery = {
           page: state.page,
           limit: state.limit,
-          sortStatus: query.sortStatus ?? 'none',
-          sortUpdated: query.sortUpdated ?? 'desc',
-          search: query.search,
-          slug: query.slug,
+          sortStatus: query?.sortStatus ?? 'none',
+          sortUpdated: query?.sortUpdated ?? 'desc',
+          search: query?.search,
+          slug: query?.slug,
         }
       })
-      .addCase(fetchBrands.rejected, (state, action) => {
+      .addMatcher(brandsApi.endpoints.fetchBrands.matchRejected, (state, { error }) => {
         state.status = 'failed'
-        state.error = (action.payload as string) ?? action.error.message ?? 'Failed to load brands'
+        state.error = error?.message ?? 'Failed to fetch brands'
       })
-      .addCase(deleteBrand.pending, (state) => {
+      .addMatcher(brandsApi.endpoints.deleteBrand.matchPending, (state) => {
         state.error = null
       })
-      .addCase(deleteBrand.fulfilled, (state, action) => {
-        state.items = state.items.filter((brand) => brand.slug !== action.payload)
-        state.total = Math.max(0, state.total - 1)
+      .addMatcher(brandsApi.endpoints.deleteBrand.matchFulfilled, (state, { meta }) => {
+        const slug = meta?.arg?.originalArgs as string
+        if (slug) {
+          state.items = state.items.filter((b) => b.slug !== slug)
+          state.total = Math.max(0, state.total - 1)
+        }
         state.status = 'succeeded'
       })
-      .addCase(deleteBrand.rejected, (state, action) => {
+      .addMatcher(brandsApi.endpoints.deleteBrand.matchRejected, (state, { error }) => {
         state.status = 'failed'
-        state.error = action.error.message ?? 'Failed to delete brand'
+        state.error = error?.message ?? 'Failed to delete brand'
       })
   },
 })
 
-export const { clearBrands } = brandsSlice.actions
-export const brandsReducer = brandsSlice.reducer
+export const { useFetchBrandsQuery, useLazyFetchBrandsQuery, useDeleteBrandMutation } = brandsApi
+export const usePrefetchBrands = () => brandsApi.usePrefetch('fetchBrands')
+export const { clearBrands, setLastQuery } = brandsSlice.actions
+export default brandsSlice.reducer

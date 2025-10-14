@@ -1,66 +1,65 @@
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
 import type { BrandQuery, BrandResponse } from '@/types/brands'
 
-const buildUrl = (query?: BrandQuery) => {
-  const base = APIEndpoint.BackendUrl || '/api'
-  const versionPrefix = APIEndpoint.VersionPrefix || '/v1'
-  const isAbsolute = /^https?:/i.test(base)
-  const sanitizedBase = base.replace(/\/+$/, '')
-  const normalizedVersion = (versionPrefix.startsWith('/') ? versionPrefix : `/${versionPrefix}`).replace(
-    /\/+$/,
-    '',
-  )
-  const resourcePath = `${normalizedVersion}/cars/brands`
-  const target = `${sanitizedBase}${resourcePath}`
-  const relativeTarget = target.startsWith('/') ? target : `/${target}`
-  const url = isAbsolute ? new URL(target) : new URL(relativeTarget, 'http://localhost')
+const baseUrl = APIEndpoint.BackendUrl
+const brandsPath = APIEndpoint.cars.brands
 
-  if (query) {
-    if (query.search) url.searchParams.set('search', query.search)
-    if (query.slug) url.searchParams.set('slug', query.slug)
-    if (query.sortStatus) url.searchParams.set('sortStatus', query.sortStatus)
-    if (query.sortUpdated) url.searchParams.set('sortUpdated', query.sortUpdated)
-    if (query.page) url.searchParams.set('page', String(query.page))
-    if (query.limit) url.searchParams.set('limit', String(query.limit))
-  }
-
-  return isAbsolute ? url.toString() : `${url.pathname}${url.search}`
-}
-
-export async function fetchBrands(query: BrandQuery = {}): Promise<BrandResponse> {
-  const response = await fetch(buildUrl(query), {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
+export const brandsApi = createApi({
+  reducerPath: 'brandsApi',
+  baseQuery: fetchBaseQuery({
+    baseUrl,
+    prepareHeaders: (headers) => {
+      headers.set('Accept', 'application/json')
+      return headers
     },
-    cache: 'no-store',
-  })
+  }),
+  tagTypes: ['Brands'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
+  endpoints: (builder) => ({
+    /**
+     * GET /cars/brands
+     */
+    fetchBrands: builder.query<BrandResponse, BrandQuery | void>({
+      query: (query) => {
+        const params = new URLSearchParams()
 
-  if (!response.ok) {
-    throw new Error(`Unable to fetch brands (status ${response.status})`)
-  }
+        if (query?.search) params.set('search', query.search)
+        if (query?.slug) params.set('slug', query.slug)
+        if (query?.sortStatus) params.set('sortStatus', query.sortStatus)
+        if (query?.sortUpdated) params.set('sortUpdated', query.sortUpdated)
+        if (query?.page) params.set('page', String(query.page))
+        if (query?.limit) params.set('limit', String(query.limit))
 
-  const payload = (await response.json()) as BrandResponse
-  return payload
-}
+        return {
+          url: `${brandsPath}?${params.toString()}`,
+          method: 'GET',
+        }
+      },
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map(({ slug }) => ({ type: 'Brands' as const, id: slug })),
+              { type: 'Brands', id: 'LIST' },
+            ]
+          : [{ type: 'Brands', id: 'LIST' }],
+    }),
 
-export async function deleteBrand(slug: string): Promise<void> {
-  const response = await fetch(buildUrl(), {
-    method: 'DELETE',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ slug }),
-  })
-
-  if (!response.ok) {
-    const message = `Unable to delete brand (status ${response.status})`
-    throw new Error(message)
-  }
-}
-
-export const brandsApi = {
-  fetchBrands,
-  deleteBrand,
-}
+    /**
+     * DELETE /cars/brands
+     */
+    deleteBrand: builder.mutation<void, string>({
+      query: (slug) => ({
+        url: `${brandsPath}`,
+        method: 'DELETE',
+        body: { slug },
+      }),
+      invalidatesTags: (_result, _error, slug) => [
+        { type: 'Brands', id: slug },
+        { type: 'Brands', id: 'LIST' },
+      ],
+    }),
+  }),
+})
