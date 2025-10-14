@@ -15,6 +15,9 @@ export const serviceCategoriesApi = createApi({
     },
   }),
   tagTypes: ['ServiceCategories'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * GET /services/service-category

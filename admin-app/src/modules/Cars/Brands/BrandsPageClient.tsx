@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import { FiEdit2, FiTrash2 } from 'react-icons/fi'
 
 import Table, { type TableColumn } from '@/components/Table'
 import type { Brand, BrandQuery, BrandSortStatus, BrandSortUpdated } from '@/types/brands'
-import { useDeleteBrandMutation, useFetchBrandsQuery } from '@/store/slices/brands/brandsSlice'
+import { useDeleteBrandMutation, useFetchBrandsQuery, usePrefetchBrands } from '@/store/slices/brands/brandsSlice'
 
 const formatDate = (value: string | null) => {
   if (!value) return '—'
@@ -42,6 +42,7 @@ const BrandsPageClient = () => {
 
   const { data, error, isFetching, isLoading, refetch } = useFetchBrandsQuery(query)
   const [deleteBrand, { isLoading: isDeleting }] = useDeleteBrandMutation()
+  const prefetchBrands = usePrefetchBrands()
 
   const items = data?.data ?? []
   const total = data?.total ?? 0
@@ -63,6 +64,18 @@ const BrandsPageClient = () => {
     },
     [deleteBrand, refetch],
   )
+
+  useEffect(() => {
+    if (!prefetchBrands) return
+    const baseQuery = { ...query }
+
+    if (safePage < totalPages) {
+      prefetchBrands({ ...baseQuery, page: safePage + 1 }, { ifOlderThan: 30 })
+    }
+    if (safePage > 1) {
+      prefetchBrands({ ...baseQuery, page: safePage - 1 }, { ifOlderThan: 30 })
+    }
+  }, [prefetchBrands, query, safePage, totalPages])
 
   const columns: TableColumn<Brand>[] = useMemo(
     () => [

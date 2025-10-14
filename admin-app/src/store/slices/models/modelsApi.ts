@@ -15,6 +15,9 @@ export const modelsApi = createApi({
     },
   }),
   tagTypes: ['Models'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * GET /cars/models

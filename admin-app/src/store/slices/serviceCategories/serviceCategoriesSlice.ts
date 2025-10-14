@@ -94,5 +94,8 @@ export const {
   useDeleteServiceCategoryMutation,
 } = serviceCategoriesApi
 
+export const usePrefetchServiceCategories = () =>
+  serviceCategoriesApi.usePrefetch('fetchServiceCategories')
+
 export const { clearServiceCategories, setLastQuery } = serviceCategoriesSlice.actions
 export default serviceCategoriesSlice.reducer

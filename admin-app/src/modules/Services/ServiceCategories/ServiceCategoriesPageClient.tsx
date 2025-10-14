@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { FiEdit2, FiPlus, FiTrash2 } from 'react-icons/fi'
 import { toast } from '@/lib/sonner'
 
@@ -8,6 +8,7 @@ import Table, { type TableColumn } from '@/components/Table'
 import {
   useFetchServiceCategoriesQuery,
   useDeleteServiceCategoryMutation,
+  usePrefetchServiceCategories,
 } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
 import type { ServiceCategory, ServiceCategoryQuery } from '@/types/serviceCategories'
 
@@ -29,8 +30,6 @@ const ServiceCategoriesPageClient = () => {
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
   const [deleteTarget, setDeleteTarget] = useState<ServiceCategory | null>(null)
-  const [formState, setFormState] = useState<{ mode: 'create' | 'edit'; id?: number; name: string } | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
 
   const query = useMemo<ServiceCategoryQuery>(
     () => ({
@@ -49,6 +48,7 @@ const ServiceCategoriesPageClient = () => {
   } = useFetchServiceCategoriesQuery(query)
 
   const [deleteServiceCategory] = useDeleteServiceCategoryMutation()
+  const prefetchServiceCategories = usePrefetchServiceCategories()
 
   const items = categoriesResponse?.data ?? []
   const total = categoriesResponse?.total ?? 0
@@ -88,8 +88,7 @@ const ServiceCategoriesPageClient = () => {
               type="button"
               className="flex h-9 w-9 items-center justify-center rounded-md border border-brand-300 bg-white text-brand-600 transition hover:bg-brand-50"
               onClick={() => {
-                setFormError(null)
-                setFormState({ mode: 'edit', id: row.id, name: row.name })
+                toast.info('Edit modal coming soon.')
               }}
               aria-label={`Edit ${row.name}`}
             >
@@ -115,6 +114,18 @@ const ServiceCategoriesPageClient = () => {
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIndex = total === 0 ? 0 : Math.min(startIndex + items.length - 1, total)
 
+  useEffect(() => {
+    if (!prefetchServiceCategories) return
+    const baseQuery = { ...query }
+
+    if (safePage < totalPages) {
+      prefetchServiceCategories({ ...baseQuery, page: safePage + 1 }, { ifOlderThan: 30 })
+    }
+    if (safePage > 1) {
+      prefetchServiceCategories({ ...baseQuery, page: safePage - 1 }, { ifOlderThan: 30 })
+    }
+  }, [prefetchServiceCategories, query, safePage, totalPages])
+
   return (
     <section className="space-y-6 pb-8">
       <header className="space-y-1">
@@ -126,8 +137,7 @@ const ServiceCategoriesPageClient = () => {
           type="button"
           className="mt-3 inline-flex items-center gap-2 rounded-full border border-brand-500 bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600"
           onClick={() => {
-            setFormError(null)
-            setFormState({ mode: 'create', name: '' })
+            toast.info('Create category flow coming soon.')
           }}
         >
           <FiPlus className="h-4 w-4" /> Add Category

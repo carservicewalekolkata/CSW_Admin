@@ -15,6 +15,9 @@ export const brandsApi = createApi({
     },
   }),
   tagTypes: ['Brands'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * GET /cars/brands
@@ -60,4 +63,3 @@ export const brandsApi = createApi({
     }),
   }),
 })
-

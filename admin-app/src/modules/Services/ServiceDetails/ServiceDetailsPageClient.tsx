@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Image from 'next/image'
 import Table, { type TableColumn } from '@/components/Table'
 
-import { useFetchServicesQuery } from '@/store/slices/services/servicesSlice'
+import { useFetchServicesQuery, usePrefetchServices } from '@/store/slices/services/servicesSlice'
 import { useFetchServiceCategoriesQuery } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
 import type { Service, ServiceQuery } from '@/types/services'
 import type { ServiceCategory } from '@/types/serviceCategories'
@@ -69,6 +69,7 @@ const ServiceDetailsPageClient = () => {
     isLoading,
     error,
   } = useFetchServicesQuery(query)
+  const prefetchServices = usePrefetchServices()
 
   const { data: categoriesResponse } = useFetchServiceCategoriesQuery({
     limit: 100,
@@ -83,6 +84,17 @@ const ServiceDetailsPageClient = () => {
   const safePage = Math.min(page, totalPages)
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIndex = total === 0 ? 0 : Math.min(startIndex + items.length - 1, total)
+  useEffect(() => {
+    if (!prefetchServices) return
+    const baseQuery = { ...query }
+
+    if (safePage < totalPages) {
+      prefetchServices({ ...baseQuery, page: safePage + 1 }, { ifOlderThan: 30 })
+    }
+    if (safePage > 1) {
+      prefetchServices({ ...baseQuery, page: safePage - 1 }, { ifOlderThan: 30 })
+    }
+  }, [prefetchServices, query, safePage, totalPages])
 
   const columns: TableColumn<Service>[] = useMemo(
     () => [

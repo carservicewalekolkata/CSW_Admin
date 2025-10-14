@@ -19,7 +19,7 @@ const LoginForm = () => {
   const router = useRouter()
   const dispatch = useAppDispatch()
 
-  const { status: authStatus, error: authError, rememberMe } = useAppSelector(
+  const { error: authError, rememberMe } = useAppSelector(
     (state) => state.auth,
   )
 

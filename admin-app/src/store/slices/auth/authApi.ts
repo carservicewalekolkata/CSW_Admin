@@ -46,6 +46,9 @@ export const authApi = createApi({
     },
   }),
   tagTypes: ['Auth'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * POST /auth/login
@@ -112,3 +115,6 @@ export const {
   useCheckDatabaseConnectionQuery,
   useRequestPasswordResetMutation,
 } = authApi
+
+export const usePrefetchDatabaseStatus = () =>
+  authApi.usePrefetch('checkDatabaseConnection')

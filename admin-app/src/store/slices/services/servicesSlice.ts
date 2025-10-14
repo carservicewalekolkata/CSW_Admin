@@ -74,5 +74,6 @@ const servicesSlice = createSlice({
 })
 
 export const { useFetchServicesQuery, useLazyFetchServicesQuery } = servicesApi
+export const usePrefetchServices = () => servicesApi.usePrefetch('fetchServices')
 export const { clearServices, setLastQuery } = servicesSlice.actions
 export default servicesSlice.reducer

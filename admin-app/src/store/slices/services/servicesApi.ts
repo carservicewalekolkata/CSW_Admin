@@ -15,6 +15,9 @@ export const servicesApi = createApi({
     },
   }),
   tagTypes: ['Services'],
+  keepUnusedDataFor: 5 * 60,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * GET /services/details

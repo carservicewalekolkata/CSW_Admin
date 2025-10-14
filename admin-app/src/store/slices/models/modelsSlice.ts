@@ -92,5 +92,6 @@ const modelsSlice = createSlice({
 })
 
 export const { useFetchModelsQuery, useLazyFetchModelsQuery, useDeleteModelMutation } = modelsApi
+export const usePrefetchModels = () => modelsApi.usePrefetch('fetchModels')
 export const { clearModels, setLastQuery } = modelsSlice.actions
 export default modelsSlice.reducer
