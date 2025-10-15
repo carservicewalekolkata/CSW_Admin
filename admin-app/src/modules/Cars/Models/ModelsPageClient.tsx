@@ -383,11 +383,13 @@ const ModelsPageClient = () => {
                     key={service.services_id}
                     className="flex items-center justify-between rounded-lg border border-brand-100/70 bg-brand-50/40 px-3 py-2"
                   >
-                    <div className="space-y-0.5">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">
-                        Service ID
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-brand-700">
+                        {service.name ?? 'Unnamed service'}
                       </p>
-                      <p className="font-medium text-brand-700">{service.services_id}</p>
+                      <p className="text-xs text-brand-500">
+                        Time taken: {service.time_taken ?? '—'}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">

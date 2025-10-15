@@ -4,6 +4,8 @@ export type { BrandSortStatus, BrandSortUpdated } from './brands'
 
 export interface ModelService {
   services_id: string
+  name: string | null
+  time_taken: string | null
   discount: number
   original_price: number
   discount_price: number
