@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 
-const DEFAULT_ALLOWED_ORIGINS = process.env.PUBLIC_CORS_ORIGINS
-  ? process.env.PUBLIC_CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
-  : []
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://carservicewale.com",
+  "https://www.carservicewale.com",
+  "https://control.carservicewalekolkata.com"
+]
 
 const isOriginAllowed = (origin: string | null): string | null => {
   if (!origin) {
