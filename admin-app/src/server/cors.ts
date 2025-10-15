@@ -1,21 +1,26 @@
 import { NextResponse } from 'next/server'
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://carservicewale.com",
-  "https://www.carservicewale.com",
-  "https://control.carservicewalekolkata.com"
+const FALLBACK_ALLOWED_ORIGINS = [
+  'https://carservicewale.com',
+  'https://www.carservicewale.com',
 ]
+
+const configuredOrigins = process.env.PUBLIC_CORS_ORIGINS
+  ? process.env.PUBLIC_CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : []
+
+const ALLOWED_ORIGINS = configuredOrigins.length > 0 ? configuredOrigins : FALLBACK_ALLOWED_ORIGINS
 
 const isOriginAllowed = (origin: string | null): string | null => {
   if (!origin) {
     return null
   }
 
-  if (DEFAULT_ALLOWED_ORIGINS.length === 0 || DEFAULT_ALLOWED_ORIGINS.includes('*')) {
+  if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes('*')) {
     return origin
   }
 
-  return DEFAULT_ALLOWED_ORIGINS.includes(origin) ? origin : null
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null
 }
 
 const ensureVaryHeader = (response: NextResponse, value: string) => {
@@ -43,6 +48,10 @@ export const applyCors = (request: Request, response: NextResponse) => {
   const requestedHeaders =
     request.headers.get('access-control-request-headers') ?? 'Content-Type, Authorization'
   response.headers.set('Access-Control-Allow-Headers', requestedHeaders)
+
+  if (origin && !allowedOrigin) {
+    console.warn('[CORS] Blocked origin:', origin, 'Allowed:', ALLOWED_ORIGINS.join(', '))
+  }
 
   return response
 }
