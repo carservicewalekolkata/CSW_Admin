@@ -84,6 +84,7 @@ jobs:
           ingress: external
           environmentVariables: >
             NODE_ENV=production
+            PUBLIC_CORS_ORIGINS=${{ secrets.PUBLIC_CORS_ORIGINS }}
             MONGODB_URI=${{ secrets.MONGODB_URI }}
             DB_CSW_NAME=${{ secrets.DB_CSW_NAME }}
             GOMECHANIC_BEARER_TOKEN=${{ secrets.GOMECHANIC_BEARER_TOKEN }}
