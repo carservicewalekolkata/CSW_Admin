@@ -24,6 +24,12 @@ export const NAVIGATION: PrimaryNavItem[] = [
         description: 'Keep an eye on import history and recent updates.',
         href: '/dashboard/activity',
       },
+      {
+        id: 'customers',
+        label: 'Customers',
+        description: 'Monitor verified customer searches and sessions.',
+        href: '/dashboard/activity/customers',
+      },
     ],
   },
   {

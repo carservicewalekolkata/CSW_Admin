@@ -34,4 +34,7 @@ export const APIEndpoint: ApiEndpoints = {
     servicesCategory: `${apiVersion}/services/service-category`,
     servicesDetails: `${apiVersion}/services/details`,
   },
+  activity: {
+    customers: `${apiVersion}/activity/customers`,
+  },
 };

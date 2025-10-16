@@ -6,3 +6,4 @@ export * from "./models";
 export * from "./serviceCategories";
 export * from "./roles";
 export * from "./services";
+export * from "./customerActivity";

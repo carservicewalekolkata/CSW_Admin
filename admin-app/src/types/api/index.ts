@@ -24,10 +24,15 @@ interface Services {
   servicesDetails: string
 }
 
+interface ActivityEndpoints {
+  customers: string
+}
+
 export interface ApiEndpoints {
   BackendUrl: string;
   auth: AuthEndpointConfig;
   admin: AdminEndpointConfig;
   cars: Cars;
   services: Services;
+  activity: ActivityEndpoints;
 }
