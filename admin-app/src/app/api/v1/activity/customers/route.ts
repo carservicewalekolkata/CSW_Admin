@@ -9,7 +9,7 @@ import {
 } from '@/server/customerActivityStore'
 import { applyCors, corsPreflight } from '@/server/cors'
 
-const isValidVehicle = (vehicle: CustomerActivityVehicle | null | undefined) =>
+const isValidVehicle = (vehicle: CustomerActivityVehicle | null | undefined): vehicle is CustomerActivityVehicle =>
   Boolean(
     vehicle &&
       typeof vehicle.brandSlug === 'string' &&
