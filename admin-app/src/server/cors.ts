@@ -5,11 +5,24 @@ const FALLBACK_ALLOWED_ORIGINS = [
   'https://www.carservicewale.com',
 ]
 
+const DEV_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]
+
 const configuredOrigins = process.env.PUBLIC_CORS_ORIGINS
   ? process.env.PUBLIC_CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
   : []
 
-const ALLOWED_ORIGINS = configuredOrigins.length > 0 ? configuredOrigins : FALLBACK_ALLOWED_ORIGINS
+const baseAllowedOrigins = configuredOrigins.length > 0 ? configuredOrigins : FALLBACK_ALLOWED_ORIGINS
+const ALLOWED_ORIGINS =
+  process.env.NODE_ENV === 'production'
+    ? baseAllowedOrigins
+    : Array.from(new Set([...DEV_ALLOWED_ORIGINS, ...baseAllowedOrigins]))
 
 const isOriginAllowed = (origin: string | null): string | null => {
   if (!origin) {
@@ -44,7 +57,7 @@ export const applyCors = (request: Request, response: NextResponse) => {
     ensureVaryHeader(response, 'Origin')
   }
 
-  response.headers.set('Access-Control-Allow-Methods', 'GET,OPTIONS')
+  response.headers.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
   const requestedHeaders =
     request.headers.get('access-control-request-headers') ?? 'Content-Type, Authorization'
   response.headers.set('Access-Control-Allow-Headers', requestedHeaders)

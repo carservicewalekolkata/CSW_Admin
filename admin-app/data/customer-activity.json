@@ -1,0 +1,26 @@
+{
+  "sessions": [
+    {
+      "token": "1f9ca4ce-3604-4135-8530-3754c1a1702f",
+      "phone": "9785574848",
+      "createdAt": "2025-10-16T00:11:10.800Z",
+      "updatedAt": "2025-10-16T00:11:10.801Z",
+      "entries": [
+        {
+          "id": "bfdbfed8-a12b-4d65-9a3a-f53ce1482d6c",
+          "sessionToken": "1f9ca4ce-3604-4135-8530-3754c1a1702f",
+          "phone": "9785574848",
+          "vehicle": {
+            "brandSlug": "audi",
+            "brandName": "Audi",
+            "modelSlug": "e-tron",
+            "modelName": "e-tron",
+            "fuelType": "Electric"
+          },
+          "vehicleSummary": "Electric Audi e-tron",
+          "createdAt": "2025-10-16T00:11:10.801Z"
+        }
+      ]
+    }
+  ]
+}

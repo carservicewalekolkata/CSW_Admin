@@ -1,8 +1,9 @@
 import { revalidateTag, unstable_cache } from 'next/cache'
+import { Types } from 'mongoose'
 
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
-import { getModelModel } from '@/models'
+import { getModelModel, getServiceModel } from '@/models'
 import type { ModelService } from '@/types/models'
 import { applyCors, corsPreflight } from '@/server/cors'
 
@@ -109,6 +110,22 @@ const buildCacheKey = ({
   limit,
 }: QueryParams) =>
   JSON.stringify({ search, slug, brand, bodyType, fuel, sortStatus, sortUpdated, page, limit })
+
+const toServiceIdString = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value
+  }
+
+  if (value && typeof value === 'object') {
+    const candidate = value as { toString?: () => string }
+    if (typeof candidate.toString === 'function') {
+      const stringValue = candidate.toString()
+      return typeof stringValue === 'string' && stringValue.trim().length > 0 ? stringValue : null
+    }
+  }
+
+  return null
+}
 
 const getModelsCached = unstable_cache(
   async (params: QueryParams) => {
@@ -218,6 +235,54 @@ export async function GET(request: Request) {
     const cacheKey = buildCacheKey(query)
     const { results, total } = await getModelsCached(query)
 
+    const serviceIdSet = new Set<string>()
+    results.forEach((model) => {
+      const services: RawModelService[] = Array.isArray(model.services) ? model.services : []
+      services.forEach((service) => {
+        const serviceId = toServiceIdString(service.services_id)
+        if (serviceId) {
+          serviceIdSet.add(serviceId)
+        }
+      })
+    })
+
+    let serviceMetadata: Record<string, { name: string | null; time_taken: string | null }> = {}
+
+    if (serviceIdSet.size > 0) {
+      const validObjectIds = Array.from(serviceIdSet).filter((id) => Types.ObjectId.isValid(id))
+
+      if (validObjectIds.length > 0) {
+        const mongooseInstance = await connectToDatabase()
+        const Service = getServiceModel(mongooseInstance.connection)
+
+        const services = await Service.find({ _id: { $in: validObjectIds.map((id) => new Types.ObjectId(id)) } })
+          .select(['_id', 'name', 'time_taken'])
+          .lean<Array<{ _id: Types.ObjectId; name?: unknown; time_taken?: unknown }>>()
+
+        serviceMetadata = services.reduce<Record<string, { name: string | null; time_taken: string | null }>>(
+          (acc, service) => {
+            const id = service._id?.toString()
+            if (!id) {
+              return acc
+            }
+
+            const name =
+              typeof service.name === 'string' && service.name.trim().length > 0
+                ? service.name.trim()
+                : null
+            const timeTaken =
+              typeof service.time_taken === 'string' && service.time_taken.trim().length > 0
+                ? service.time_taken.trim()
+                : null
+
+            acc[id] = { name, time_taken: timeTaken }
+            return acc
+          },
+          {},
+        )
+      }
+    }
+
     const data = results.map((model) => {
       const thumbnailId = normalizeIconId(model.thumbnail)
       const services: RawModelService[] = Array.isArray(model.services) ? model.services : []
@@ -234,19 +299,18 @@ export async function GET(request: Request) {
         image: normalizeImagePath(model.image),
         services: services
           .map((service) => {
-            const serviceId =
-              typeof service.services_id === 'string'
-                ? service.services_id
-                : service.services_id && typeof (service.services_id as { toString: () => string }).toString === 'function'
-                  ? (service.services_id as { toString: () => string }).toString()
-                  : null
+            const serviceId = toServiceIdString(service.services_id)
 
             if (!serviceId) {
               return null
             }
 
+            const metadata = serviceMetadata[serviceId] ?? { name: null, time_taken: null }
+
             return {
               services_id: serviceId,
+              name: metadata.name,
+              time_taken: metadata.time_taken,
               discount: Number.isFinite(service.discount) ? Number(service.discount) : 0,
               original_price: Number.isFinite(service.original_price) ? Number(service.original_price) : 0,
               discount_price: Number.isFinite(service.discount_price) ? Number(service.discount_price) : 0,
