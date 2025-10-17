@@ -531,8 +531,8 @@ export async function POST(request: Request) {
 
     const fuelType = Array.isArray(payload?.fuelType)
       ? payload.fuelType
-          .filter((fuel): fuel is string => typeof fuel === 'string' && fuel.trim().length > 0)
-          .map((fuel) => fuel.trim())
+          .filter((fuel: unknown): fuel is string => typeof fuel === 'string' && fuel.trim().length > 0)
+          .map((fuel: string) => fuel.trim())
       : []
 
     const status = typeof payload?.status === 'boolean' ? payload.status : true
@@ -540,15 +540,13 @@ export async function POST(request: Request) {
     const servicesInput = Array.isArray(payload?.services) ? payload.services : []
     let services: RawModelService[] = []
     try {
-      services = servicesInput.map((service) => {
+      services = servicesInput.map((service: unknown) => {
         if (!service || typeof service !== 'object') {
           throw new Error('Invalid service payload')
         }
 
-        const serviceId =
-          typeof (service as { serviceId?: unknown }).serviceId === 'string'
-            ? (service as { serviceId?: string }).serviceId.trim()
-            : ''
+        const rawServiceId = (service as { serviceId?: unknown }).serviceId
+        const serviceId = typeof rawServiceId === 'string' ? rawServiceId.trim() : ''
 
         if (!Types.ObjectId.isValid(serviceId)) {
           throw new Error('Service id must be a valid ObjectId')
@@ -872,15 +870,13 @@ export async function PATCH(request: Request) {
       const servicesInput = Array.isArray(payload.services) ? payload.services : []
       let services: RawModelService[] = []
       try {
-        services = servicesInput.map((service) => {
+        services = servicesInput.map((service: unknown) => {
           if (!service || typeof service !== 'object') {
             throw new Error('Invalid service payload')
           }
 
-          const serviceId =
-            typeof (service as { serviceId?: unknown }).serviceId === 'string'
-              ? (service as { serviceId?: string }).serviceId.trim()
-              : ''
+          const rawServiceId = (service as { serviceId?: unknown }).serviceId
+          const serviceId = typeof rawServiceId === 'string' ? rawServiceId.trim() : ''
 
           if (!Types.ObjectId.isValid(serviceId)) {
             throw new Error('Service id must be a valid ObjectId')

@@ -534,10 +534,10 @@ const ModelsPageClient = () => {
       setServicePickerError(null)
       setServiceOptions([])
       if (value) {
-        const categoryId = Number(value)
-        if (Number.isFinite(categoryId)) {
+        const numericCategoryId = Number(value)
+        if (Number.isFinite(numericCategoryId)) {
           try {
-            await triggerServices({ category: categoryId, limit: 200, sortUpdated: 'desc' })
+            await triggerServices({ category: value, limit: 200, sortUpdated: 'desc' })
           } catch (serviceError) {
             console.error(serviceError)
             toast.error('Failed to load services for the selected category')
