@@ -49,3 +49,43 @@ export type ModelResponse = {
   timestamp: string
   data: Model[]
 }
+
+export type ModelServiceInput = {
+  serviceId: string
+  discount?: number
+  originalPrice?: number
+  discountPrice?: number
+}
+
+export type CreateModelRequest = {
+  name: string
+  brandSlug: string
+  slug?: string
+  bodyType?: string | null
+  fuelType?: string[]
+  status?: boolean
+  imagePath?: string | null
+  iconId?: string | null
+  services?: ModelServiceInput[]
+}
+
+export type UpdateModelRequest = {
+  slug: string
+  name?: string
+  newSlug?: string
+  brandSlug?: string
+  bodyType?: string | null
+  fuelType?: string[]
+  status?: boolean
+  imagePath?: string | null
+  iconId?: string | null
+  previousIconId?: string
+  previousImagePath?: string
+  services?: ModelServiceInput[]
+}
+
+export type ModelMutationResponse = {
+  success: boolean
+  message?: string
+  data?: Model
+}

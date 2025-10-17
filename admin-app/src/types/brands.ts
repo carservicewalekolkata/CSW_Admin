@@ -29,3 +29,32 @@ export type BrandResponse = {
   timestamp: string
   data: Brand[]
 }
+
+export type CreateBrandRequest = {
+  name: string
+  slug?: string
+  status?: boolean
+  icon?: string | null
+}
+
+export type UpdateBrandRequest = {
+  slug: string
+  name?: string
+  newSlug?: string
+  status?: boolean
+  icon?: string | null
+  previousIconId?: string
+}
+
+export type BrandMutationResponse = {
+  success: boolean
+  message?: string
+  data?: Brand
+}
+
+export type BrandIconUploadResponse = {
+  success: boolean
+  iconId: string
+  url: string
+  message?: string
+}

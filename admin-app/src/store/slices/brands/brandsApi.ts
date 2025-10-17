@@ -1,6 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
-import type { BrandQuery, BrandResponse } from '@/types/brands'
+import type {
+  BrandMutationResponse,
+  BrandQuery,
+  BrandResponse,
+  CreateBrandRequest,
+  UpdateBrandRequest,
+} from '@/types/brands'
 
 const baseUrl = APIEndpoint.BackendUrl
 const brandsPath = APIEndpoint.cars.brands
@@ -61,5 +67,48 @@ export const brandsApi = createApi({
         { type: 'Brands', id: 'LIST' },
       ],
     }),
+
+    /**
+     * POST /cars/brands
+     */
+    createBrand: builder.mutation<BrandMutationResponse, CreateBrandRequest>({
+      query: (body) => ({
+        url: `${brandsPath}`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'Brands', id: 'LIST' }],
+    }),
+
+    /**
+     * PATCH /cars/brands
+     */
+    updateBrand: builder.mutation<BrandMutationResponse, UpdateBrandRequest>({
+      query: ({ slug, ...body }) => ({
+        url: `${brandsPath}`,
+        method: 'PATCH',
+        body: { slug, ...body },
+      }),
+      invalidatesTags: (_result, _error, { slug, newSlug }) => {
+        const tags = [
+          { type: 'Brands' as const, id: slug },
+          { type: 'Brands' as const, id: 'LIST' },
+        ]
+
+        if (newSlug && newSlug !== slug) {
+          tags.push({ type: 'Brands' as const, id: newSlug })
+        }
+
+        return tags
+      },
+    }),
   }),
 })
+
+export const {
+  useFetchBrandsQuery,
+  useLazyFetchBrandsQuery,
+  useDeleteBrandMutation,
+  useCreateBrandMutation,
+  useUpdateBrandMutation,
+} = brandsApi

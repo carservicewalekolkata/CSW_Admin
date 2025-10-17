@@ -1,4 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { GridFSBucket } from 'mongodb'
+import { Types } from 'mongoose'
 import { revalidateTag, unstable_cache } from 'next/cache'
 
 import { versionedJson } from '@/server/apiVersion'
@@ -24,6 +26,18 @@ type QueryParams = {
   page?: number
   limit?: number
 }
+
+const slugify = (value: string): string => {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const normalizeDate = (value?: Date | string): string | null => {
   if (!value) {
@@ -193,6 +207,337 @@ export async function GET(request: Request) {
         },
         { status: 500 },
       ),
+    )
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const mongooseInstance = await connectToDatabase()
+    const connection = mongooseInstance.connection
+
+    if (!connection?.db) {
+      throw new Error('No active MongoDB connection')
+    }
+
+    const payload = await request.json().catch(() => null)
+
+    const rawName = typeof payload?.name === 'string' ? payload.name.trim() : ''
+    const rawSlug = typeof payload?.slug === 'string' ? payload.slug.trim() : ''
+    const desiredStatus = typeof payload?.status === 'boolean' ? payload.status : true
+    const rawIcon =
+      payload && Object.prototype.hasOwnProperty.call(payload, 'icon')
+        ? payload.icon
+        : undefined
+
+    if (!rawName) {
+      return versionedJson(
+        { success: false, message: 'Brand name is required' },
+        { status: 400 },
+      )
+    }
+
+    const resolvedSlug = slugify(rawSlug || rawName)
+    if (!resolvedSlug) {
+      return versionedJson(
+        { success: false, message: 'Brand slug is required' },
+        { status: 400 },
+      )
+    }
+
+    let icon: Types.ObjectId | null | undefined
+    if (rawIcon === null) {
+      icon = null
+    } else if (typeof rawIcon === 'string') {
+      const trimmed = rawIcon.trim()
+      if (trimmed.length > 0) {
+        if (!Types.ObjectId.isValid(trimmed)) {
+          return versionedJson(
+            { success: false, message: 'Icon must be a valid ObjectId' },
+            { status: 400 },
+          )
+        }
+        icon = new Types.ObjectId(trimmed)
+      } else {
+        icon = null
+      }
+    } else if (rawIcon === undefined) {
+      icon = undefined
+    } else {
+      return versionedJson(
+        { success: false, message: 'Icon must be provided as a string or null' },
+        { status: 400 },
+      )
+    }
+
+    const Brand = getBrandModel(connection)
+
+    const slugConflict = await Brand.findOne({ slug: resolvedSlug }).lean()
+    if (slugConflict) {
+      return versionedJson(
+        { success: false, message: 'Another brand with the same slug exists' },
+        { status: 409 },
+      )
+    }
+
+    const nameRegex = new RegExp(`^${escapeRegExp(rawName)}$`, 'i')
+    const nameConflict = await Brand.findOne({ name: nameRegex }).lean()
+    if (nameConflict) {
+      return versionedJson(
+        { success: false, message: 'Another brand with the same name exists' },
+        { status: 409 },
+      )
+    }
+
+    const lastBrand = await Brand.findOne().sort({ id: -1 }).select(['id']).lean<{ id?: unknown }>()
+    const lastIdCandidate =
+      typeof lastBrand?.id === 'number'
+        ? lastBrand.id
+        : typeof lastBrand?.id === 'string'
+          ? Number(lastBrand.id)
+          : 0
+    const nextId = Number.isFinite(lastIdCandidate) ? Number(lastIdCandidate) + 1 : 1
+    const now = new Date()
+
+    const createdDoc = await Brand.create({
+      id: nextId,
+      name: rawName,
+      slug: resolvedSlug,
+      status: desiredStatus,
+      icon: icon === undefined ? null : icon,
+      created_date: now,
+      updated_date: now,
+    })
+
+    revalidateTag('brands')
+
+    const created = createdDoc.toObject() as RawBrand & { icon?: unknown }
+    const iconId = normalizeIconId(created.icon)
+
+    return versionedJson(
+      {
+        success: true,
+        data: {
+          name: created.name,
+          slug: created.slug,
+          status: Boolean(created.status),
+          icon: iconId ? `/api/v1/cars/brands/icon/${iconId}` : null,
+          created_date: normalizeDate(created.created_date) ?? now.toISOString(),
+          updated_date: normalizeDate(created.updated_date) ?? now.toISOString(),
+        },
+      },
+      { status: 201 },
+    )
+  } catch (error: any) {
+    console.error('❌ Error creating brand:', error)
+    return versionedJson(
+      {
+        success: false,
+        message: error?.message ?? 'Unable to create brand',
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const mongooseInstance = await connectToDatabase()
+    const connection = mongooseInstance.connection
+
+    if (!connection?.db) {
+      throw new Error('No active MongoDB connection')
+    }
+
+    const payload = await request.json().catch(() => null)
+
+    const targetSlug =
+      typeof payload?.slug === 'string' ? payload.slug.trim().toLowerCase() : undefined
+
+    if (!targetSlug) {
+      return versionedJson(
+        { success: false, message: 'Brand slug is required' },
+        { status: 400 },
+      )
+    }
+
+    const updates: Record<string, unknown> = {}
+    let iconChanged = false
+    let newIconId: string | null | undefined
+
+    const rawName =
+      typeof payload?.name === 'string' ? payload.name.trim() : undefined
+    if (rawName !== undefined) {
+      if (!rawName) {
+        return versionedJson(
+          { success: false, message: 'Brand name cannot be empty' },
+          { status: 400 },
+        )
+      }
+      updates.name = rawName
+    }
+
+    let newSlug: string | undefined
+    if (typeof payload?.newSlug === 'string') {
+      const computed = slugify(payload.newSlug)
+      if (!computed) {
+        return versionedJson(
+          { success: false, message: 'Brand slug cannot be empty' },
+          { status: 400 },
+        )
+      }
+      newSlug = computed
+      updates.slug = computed
+    }
+
+    if (typeof payload?.status === 'boolean') {
+      updates.status = payload.status
+    }
+
+    let previousIconId: Types.ObjectId | undefined
+    const rawPreviousIconId =
+      typeof payload?.previousIconId === 'string' ? payload.previousIconId.trim() : undefined
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'icon')) {
+      iconChanged = true
+      if (payload.icon === null) {
+        updates.icon = null
+        newIconId = null
+      } else if (typeof payload.icon === 'string') {
+        const trimmed = payload.icon.trim()
+        if (trimmed.length === 0) {
+          updates.icon = null
+          newIconId = null
+        } else if (Types.ObjectId.isValid(trimmed)) {
+          updates.icon = new Types.ObjectId(trimmed)
+          newIconId = trimmed
+        } else {
+          return versionedJson(
+            { success: false, message: 'Icon must be a valid ObjectId' },
+            { status: 400 },
+          )
+        }
+      } else if (payload.icon !== undefined) {
+        return versionedJson(
+          { success: false, message: 'Icon must be provided as a string or null' },
+          { status: 400 },
+        )
+      }
+    }
+
+    if (rawPreviousIconId) {
+      if (!Types.ObjectId.isValid(rawPreviousIconId)) {
+        return versionedJson(
+          { success: false, message: 'Previous icon id must be a valid ObjectId' },
+          { status: 400 },
+        )
+      }
+      previousIconId = new Types.ObjectId(rawPreviousIconId)
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return versionedJson(
+        { success: false, message: 'No updates were provided' },
+        { status: 400 },
+      )
+    }
+
+    const Brand = getBrandModel(connection)
+
+    const existing = await Brand.findOne({ slug: targetSlug })
+      .select(['id', 'name', 'slug', 'icon', 'status', 'created_date', 'updated_date'])
+      .lean<RawBrand | null>()
+
+    if (!existing) {
+      return versionedJson(
+        { success: false, message: 'Brand not found' },
+        { status: 404 },
+      )
+    }
+
+    if (rawName) {
+      const nameRegex = new RegExp(`^${escapeRegExp(rawName)}$`, 'i')
+      const nameConflict = await Brand.findOne({
+        id: { $ne: existing.id },
+        name: nameRegex,
+      }).lean()
+
+      if (nameConflict) {
+        return versionedJson(
+          { success: false, message: 'Another brand with the same name exists' },
+          { status: 409 },
+        )
+      }
+    }
+
+    if (newSlug) {
+      const slugConflict = await Brand.findOne({
+        id: { $ne: existing.id },
+        slug: newSlug,
+      }).lean()
+
+      if (slugConflict) {
+        return versionedJson(
+          { success: false, message: 'Another brand with the same slug exists' },
+          { status: 409 },
+        )
+      }
+    }
+
+    const now = new Date()
+    updates.updated_date = now
+
+    const updatedDoc = await Brand.findOneAndUpdate(
+      { slug: targetSlug },
+      { $set: updates },
+      { new: true },
+    )
+
+    if (!updatedDoc) {
+      return versionedJson(
+        { success: false, message: 'Brand not found' },
+        { status: 404 },
+      )
+    }
+
+    revalidateTag('brands')
+
+    const updated = updatedDoc.toObject() as RawBrand & { icon?: unknown }
+    const iconId = normalizeIconId(updated.icon)
+
+    const normalizedNewIconId = typeof newIconId === 'string' ? newIconId : null
+
+    if (iconChanged && previousIconId && previousIconId.toString() !== normalizedNewIconId) {
+      try {
+        const db = connection.db
+        if (db) {
+          const bucket = new GridFSBucket(db, { bucketName: 'fs' })
+          await bucket.delete(previousIconId)
+        }
+      } catch (deleteError) {
+        console.warn('⚠️ Failed to delete previous brand icon:', deleteError)
+      }
+    }
+
+    return versionedJson({
+      success: true,
+      data: {
+        name: updated.name,
+        slug: updated.slug,
+        status: Boolean(updated.status),
+        icon: iconId ? `/api/v1/cars/brands/icon/${iconId}` : null,
+        created_date: normalizeDate(updated.created_date),
+        updated_date: normalizeDate(updated.updated_date) ?? now.toISOString(),
+      },
+    })
+  } catch (error: any) {
+    console.error('❌ Error updating brand:', error)
+    return versionedJson(
+      {
+        success: false,
+        message: error?.message ?? 'Unable to update brand',
+      },
+      { status: 500 },
     )
   }
 }

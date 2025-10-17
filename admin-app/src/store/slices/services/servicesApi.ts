@@ -1,6 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
-import type { ServiceQuery, ServiceResponse } from '@/types/services'
+import type {
+  CreateServiceRequest,
+  ServiceMutationResponse,
+  ServiceQuery,
+  ServiceResponse,
+  UpdateServiceRequest,
+} from '@/types/services'
 
 const baseUrl = APIEndpoint.BackendUrl
 const servicesPath = APIEndpoint.services.servicesDetails
@@ -46,10 +52,55 @@ export const servicesApi = createApi({
             ]
           : [{ type: 'Services', id: 'LIST' }],
     }),
+
+    /**
+     * POST /services/details
+     */
+    createService: builder.mutation<ServiceMutationResponse, CreateServiceRequest>({
+      query: (body) => ({
+        url: `${servicesPath}`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'Services', id: 'LIST' }],
+    }),
+
+    /**
+     * PATCH /services/details
+     */
+    updateService: builder.mutation<ServiceMutationResponse, UpdateServiceRequest>({
+      query: ({ id, ...body }) => ({
+        url: `${servicesPath}`,
+        method: 'PATCH',
+        body: { id, ...body },
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'Services', id },
+        { type: 'Services', id: 'LIST' },
+      ],
+    }),
+
+    /**
+     * DELETE /services/details
+     */
+    deleteService: builder.mutation<void, string>({
+      query: (id) => ({
+        url: `${servicesPath}`,
+        method: 'DELETE',
+        body: { id },
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'Services', id },
+        { type: 'Services', id: 'LIST' },
+      ],
+    }),
   }),
 })
 
 export const {
   useFetchServicesQuery,
   useLazyFetchServicesQuery,
+  useCreateServiceMutation,
+  useUpdateServiceMutation,
+  useDeleteServiceMutation,
 } = servicesApi

@@ -70,10 +70,29 @@ const servicesSlice = createSlice({
         state.status = 'failed'
         state.error = error?.message ?? 'Failed to fetch services'
       })
+      .addMatcher(servicesApi.endpoints.deleteService.matchPending, (state) => {
+        state.error = null
+      })
+      .addMatcher(servicesApi.endpoints.deleteService.matchFulfilled, (state, { meta }) => {
+        const id = meta?.arg?.originalArgs as string
+        if (id) {
+          state.items = state.items.filter((service) => service.id !== id)
+          state.total = Math.max(0, state.total - 1)
+        }
+      })
+      .addMatcher(servicesApi.endpoints.deleteService.matchRejected, (state, { error }) => {
+        state.error = error?.message ?? 'Failed to delete service'
+      })
   },
 })
 
-export const { useFetchServicesQuery, useLazyFetchServicesQuery } = servicesApi
+export const {
+  useFetchServicesQuery,
+  useLazyFetchServicesQuery,
+  useCreateServiceMutation,
+  useUpdateServiceMutation,
+  useDeleteServiceMutation,
+} = servicesApi
 export const usePrefetchServices = () => servicesApi.usePrefetch('fetchServices')
 export const { clearServices, setLastQuery } = servicesSlice.actions
 export default servicesSlice.reducer

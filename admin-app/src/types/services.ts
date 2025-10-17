@@ -36,3 +36,33 @@ export type ServiceResponse = {
   timestamp: string
   data: Service[]
 }
+
+export type CreateServiceRequest = {
+  name: string
+  categoryId: number
+  description?: string | null
+  features?: string[]
+  timeTaken?: string | null
+  warranty?: string | null
+  status?: boolean
+  imagePath?: string | null
+}
+
+export type UpdateServiceRequest = {
+  id: string
+  name?: string
+  categoryId?: number
+  description?: string | null
+  features?: string[]
+  timeTaken?: string | null
+  warranty?: string | null
+  status?: boolean
+  imagePath?: string | null
+  previousImagePath?: string
+}
+
+export type ServiceMutationResponse = {
+  success: boolean
+  message?: string
+  data?: Service
+}

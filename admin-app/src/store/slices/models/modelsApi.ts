@@ -1,6 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
-import type { ModelQuery, ModelResponse } from '@/types/models'
+import type {
+  CreateModelRequest,
+  ModelMutationResponse,
+  ModelQuery,
+  ModelResponse,
+  UpdateModelRequest,
+} from '@/types/models'
 
 const baseUrl = APIEndpoint.BackendUrl
 const modelsPath = APIEndpoint.cars.models
@@ -64,6 +70,41 @@ export const modelsApi = createApi({
         { type: 'Models', id: 'LIST' },
       ],
     }),
+
+    /**
+     * POST /cars/models
+     */
+    createModel: builder.mutation<ModelMutationResponse, CreateModelRequest>({
+      query: (body) => ({
+        url: `${modelsPath}`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'Models', id: 'LIST' }],
+    }),
+
+    /**
+     * PATCH /cars/models
+     */
+    updateModel: builder.mutation<ModelMutationResponse, UpdateModelRequest>({
+      query: ({ slug, ...body }) => ({
+        url: `${modelsPath}`,
+        method: 'PATCH',
+        body: { slug, ...body },
+      }),
+      invalidatesTags: (_result, _error, { slug, newSlug }) => {
+        const tags = [
+          { type: 'Models' as const, id: slug },
+          { type: 'Models' as const, id: 'LIST' },
+        ]
+
+        if (newSlug && newSlug !== slug) {
+          tags.push({ type: 'Models' as const, id: newSlug })
+        }
+
+        return tags
+      },
+    }),
   }),
 })
 
@@ -71,4 +112,6 @@ export const {
   useFetchModelsQuery,
   useLazyFetchModelsQuery,
   useDeleteModelMutation,
+  useCreateModelMutation,
+  useUpdateModelMutation,
 } = modelsApi

@@ -1,9 +1,12 @@
+import { promises as fs } from 'fs'
+import path from 'path'
+import { GridFSBucket } from 'mongodb'
 import { revalidateTag, unstable_cache } from 'next/cache'
 import { Types } from 'mongoose'
 
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
-import { getModelModel, getServiceModel } from '@/models'
+import { getBrandModel, getModelModel, getServiceModel } from '@/models'
 import type { ModelService } from '@/types/models'
 import { applyCors, corsPreflight } from '@/server/cors'
 
@@ -41,6 +44,42 @@ type QueryParams = {
   page?: number
   limit?: number
 }
+
+const slugify = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const sanitizeImagePath = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const withoutLeadingSlash = trimmed.replace(/^\/+/, '')
+
+  if (withoutLeadingSlash.includes('..')) {
+    throw new Error('Invalid image path')
+  }
+
+  return withoutLeadingSlash
+}
+
+const toAbsoluteImagePath = (relative: string) =>
+  path.join(process.cwd(), 'public', relative.replace(/^\/+/, ''))
+
+const isManagedModelImagePath = (relative: string | null | undefined) =>
+  typeof relative === 'string' && relative.startsWith('assets/images/models/')
 
 const normalizeDate = (value?: Date | string): string | null => {
   if (!value) {
@@ -358,6 +397,600 @@ export async function GET(request: Request) {
         { status: 500 },
       ),
     )
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const mongooseInstance = await connectToDatabase()
+    const connection = mongooseInstance.connection
+
+    if (!connection?.db) {
+      throw new Error('No active MongoDB connection')
+    }
+
+    const payload = await request.json().catch(() => null)
+
+    const rawName = typeof payload?.name === 'string' ? payload.name.trim() : ''
+    if (!rawName) {
+      return versionedJson(
+        { success: false, message: 'Model name is required' },
+        { status: 400 },
+      )
+    }
+
+    const rawSlug = typeof payload?.slug === 'string' ? payload.slug.trim() : ''
+    const computedSlug = slugify(rawSlug || rawName)
+    if (!computedSlug) {
+      return versionedJson(
+        { success: false, message: 'Model slug is required' },
+        { status: 400 },
+      )
+    }
+
+    const brandSlug =
+      typeof payload?.brandSlug === 'string' ? payload.brandSlug.trim().toLowerCase() : ''
+    if (!brandSlug) {
+      return versionedJson(
+        { success: false, message: 'Brand slug is required' },
+        { status: 400 },
+      )
+    }
+
+    const Brand = getBrandModel(connection)
+    const brandDoc = await Brand.findOne({ slug: brandSlug })
+      .select(['id', 'name'])
+      .lean<{ id?: unknown; name?: unknown }>()
+
+    if (!brandDoc) {
+      return versionedJson(
+        { success: false, message: 'Brand not found' },
+        { status: 404 },
+      )
+    }
+
+    const brandId =
+      typeof brandDoc.id === 'number'
+        ? brandDoc.id
+        : typeof brandDoc.id === 'string'
+          ? Number(brandDoc.id)
+          : NaN
+
+    if (!Number.isFinite(brandId)) {
+      return versionedJson(
+        { success: false, message: 'Brand record is missing a valid numeric id' },
+        { status: 500 },
+      )
+    }
+
+    const brandName =
+      typeof brandDoc.name === 'string' && brandDoc.name.trim().length > 0
+        ? brandDoc.name.trim()
+        : rawName
+
+    const Model = getModelModel(connection)
+
+    const slugConflict = await Model.findOne({ slug: computedSlug }).lean()
+    if (slugConflict) {
+      return versionedJson(
+        { success: false, message: 'Another model with the same slug exists' },
+        { status: 409 },
+      )
+    }
+
+    const nameRegex = new RegExp(`^${escapeRegExp(rawName)}$`, 'i')
+    const nameConflict = await Model.findOne({ name: nameRegex }).lean()
+    if (nameConflict) {
+      return versionedJson(
+        { success: false, message: 'Another model with the same name exists' },
+        { status: 409 },
+      )
+    }
+
+    const thumbnailIdRaw =
+      payload && Object.prototype.hasOwnProperty.call(payload, 'iconId') ? payload.iconId : undefined
+    let thumbnail: Types.ObjectId | null | undefined
+    if (thumbnailIdRaw === null) {
+      thumbnail = null
+    } else if (typeof thumbnailIdRaw === 'string' && thumbnailIdRaw.trim().length > 0) {
+      if (!Types.ObjectId.isValid(thumbnailIdRaw)) {
+        return versionedJson(
+          { success: false, message: 'Model icon must be a valid ObjectId' },
+          { status: 400 },
+        )
+      }
+      thumbnail = new Types.ObjectId(thumbnailIdRaw)
+    } else if (thumbnailIdRaw === undefined) {
+      thumbnail = undefined
+    } else {
+      return versionedJson(
+        { success: false, message: 'Model icon must be a string or null' },
+        { status: 400 },
+      )
+    }
+
+    let imagePath: string | null = null
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'imagePath')) {
+      try {
+        imagePath = sanitizeImagePath(payload.imagePath)
+      } catch (error) {
+        return versionedJson(
+          {
+            success: false,
+            message: error instanceof Error ? error.message : 'Invalid image path',
+          },
+          { status: 400 },
+        )
+      }
+    }
+
+    const bodyType =
+      typeof payload?.bodyType === 'string' && payload.bodyType.trim().length > 0
+        ? payload.bodyType.trim()
+        : null
+
+    const fuelType = Array.isArray(payload?.fuelType)
+      ? payload.fuelType
+          .filter((fuel): fuel is string => typeof fuel === 'string' && fuel.trim().length > 0)
+          .map((fuel) => fuel.trim())
+      : []
+
+    const status = typeof payload?.status === 'boolean' ? payload.status : true
+
+    const servicesInput = Array.isArray(payload?.services) ? payload.services : []
+    let services: RawModelService[] = []
+    try {
+      services = servicesInput.map((service) => {
+        if (!service || typeof service !== 'object') {
+          throw new Error('Invalid service payload')
+        }
+
+        const serviceId =
+          typeof (service as { serviceId?: unknown }).serviceId === 'string'
+            ? (service as { serviceId?: string }).serviceId.trim()
+            : ''
+
+        if (!Types.ObjectId.isValid(serviceId)) {
+          throw new Error('Service id must be a valid ObjectId')
+        }
+
+        const discount = Number((service as { discount?: unknown }).discount ?? 0)
+        const originalPrice = Number((service as { originalPrice?: unknown }).originalPrice ?? 0)
+        const discountPrice = Number((service as { discountPrice?: unknown }).discountPrice ?? 0)
+
+        return {
+          services_id: new Types.ObjectId(serviceId),
+          discount: Number.isFinite(discount) ? discount : 0,
+          original_price: Number.isFinite(originalPrice) ? originalPrice : 0,
+          discount_price: Number.isFinite(discountPrice) ? discountPrice : 0,
+        }
+      })
+    } catch (serviceError) {
+      return versionedJson(
+        {
+          success: false,
+          message:
+            serviceError instanceof Error ? serviceError.message : 'Invalid services payload',
+        },
+        { status: 400 },
+      )
+    }
+
+    const lastModel = await Model.findOne().sort({ id: -1 }).select(['id']).lean<{ id?: unknown }>()
+    const lastIdCandidate =
+      typeof lastModel?.id === 'number'
+        ? lastModel.id
+        : typeof lastModel?.id === 'string'
+          ? Number(lastModel.id)
+          : 0
+    const nextId = Number.isFinite(lastIdCandidate) ? Number(lastIdCandidate) + 1 : 1
+
+    const now = new Date()
+    const createdDoc = await Model.create({
+      id: nextId,
+      name: rawName,
+      slug: computedSlug,
+      brand_id: brandId,
+      brand_name: brandName,
+      body_type: bodyType,
+      fuel_type: fuelType,
+      image: imagePath ?? '',
+      thumbnail: thumbnail === undefined ? null : thumbnail,
+      services,
+      status,
+      created_date: now,
+      updated_date: now,
+    })
+
+    revalidateTag('models')
+
+    const created = createdDoc.toObject() as RawModel & { thumbnail?: unknown }
+    const thumbnailId = normalizeIconId(created.thumbnail)
+
+    return versionedJson(
+      {
+        success: true,
+        data: {
+          id: created.id,
+          name: created.name,
+          slug: created.slug,
+          brand_id: created.brand_id,
+          brand_name: created.brand_name,
+          body_type: created.body_type ?? null,
+          fuel_type: Array.isArray(created.fuel_type) ? created.fuel_type : [],
+          thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
+          image: normalizeImagePath(created.image),
+          services: created.services ?? [],
+          status: Boolean(created.status),
+          created_date: normalizeDate(created.created_date) ?? now.toISOString(),
+          updated_date: normalizeDate(created.updated_date) ?? now.toISOString(),
+        },
+      },
+      { status: 201 },
+    )
+  } catch (error) {
+    console.error('❌ Error creating model:', error)
+    const message = error instanceof Error ? error.message : 'Unable to create model'
+    return versionedJson({ success: false, message }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const mongooseInstance = await connectToDatabase()
+    const connection = mongooseInstance.connection
+
+    if (!connection?.db) {
+      throw new Error('No active MongoDB connection')
+    }
+
+    const payload = await request.json().catch(() => null)
+
+    const targetSlug =
+      typeof payload?.slug === 'string' ? payload.slug.trim().toLowerCase() : undefined
+
+    if (!targetSlug) {
+      return versionedJson(
+        { success: false, message: 'Model slug is required' },
+        { status: 400 },
+      )
+    }
+
+    const Model = getModelModel(connection)
+    const existing = await Model.findOne({ slug: targetSlug })
+      .select([
+        'id',
+        'name',
+        'slug',
+        'brand_id',
+        'brand_name',
+        'thumbnail',
+        'image',
+        'services',
+        'status',
+        'fuel_type',
+        'body_type',
+      ])
+      .lean<RawModel | null>()
+
+    if (!existing) {
+      return versionedJson(
+        { success: false, message: 'Model not found' },
+        { status: 404 },
+      )
+    }
+
+    const updates: Record<string, unknown> = {}
+    let hasChanges = false
+
+    const rawName =
+      typeof payload?.name === 'string' ? payload.name.trim() : undefined
+    if (rawName !== undefined) {
+      if (!rawName) {
+        return versionedJson(
+          { success: false, message: 'Model name cannot be empty' },
+          { status: 400 },
+        )
+      }
+      if (rawName !== existing.name) {
+        const nameRegex = new RegExp(`^${escapeRegExp(rawName)}$`, 'i')
+        const nameConflict = await Model.findOne({
+          id: { $ne: existing.id },
+          name: nameRegex,
+        }).lean()
+
+        if (nameConflict) {
+          return versionedJson(
+            { success: false, message: 'Another model with the same name exists' },
+            { status: 409 },
+          )
+        }
+
+        updates.name = rawName
+        hasChanges = true
+      }
+    }
+
+    if (typeof payload?.newSlug === 'string') {
+      const computed = slugify(payload.newSlug)
+      if (!computed) {
+        return versionedJson(
+          { success: false, message: 'Model slug cannot be empty' },
+          { status: 400 },
+        )
+      }
+      if (computed !== existing.slug) {
+        const slugConflict = await Model.findOne({
+          id: { $ne: existing.id },
+          slug: computed,
+        }).lean()
+
+        if (slugConflict) {
+          return versionedJson(
+            { success: false, message: 'Another model with the same slug exists' },
+            { status: 409 },
+          )
+        }
+        updates.slug = computed
+        hasChanges = true
+      }
+    }
+
+    if (typeof payload?.status === 'boolean' && payload.status !== existing.status) {
+      updates.status = payload.status
+      hasChanges = true
+    }
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'bodyType')) {
+      const bodyType =
+        typeof payload.bodyType === 'string' && payload.bodyType.trim().length > 0
+          ? payload.bodyType.trim()
+          : null
+      if (bodyType !== (existing.body_type ?? null)) {
+        updates.body_type = bodyType
+        hasChanges = true
+      }
+    }
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'fuelType')) {
+      const fuelType = Array.isArray(payload.fuelType)
+        ? payload.fuelType
+            .filter((fuel: unknown): fuel is string => typeof fuel === 'string' && fuel.trim().length > 0)
+            .map((fuel: string) => fuel.trim())
+        : []
+      if (JSON.stringify(fuelType) !== JSON.stringify(existing.fuel_type ?? [])) {
+        updates.fuel_type = fuelType
+        hasChanges = true
+      }
+    }
+
+    let brandChanged = false
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'brandSlug')) {
+      const brandSlug =
+        typeof payload.brandSlug === 'string' ? payload.brandSlug.trim().toLowerCase() : ''
+      if (!brandSlug) {
+        return versionedJson(
+          { success: false, message: 'Brand slug cannot be empty' },
+          { status: 400 },
+        )
+      }
+
+      const Brand = getBrandModel(connection)
+      const brandDoc = await Brand.findOne({ slug: brandSlug })
+        .select(['id', 'name'])
+        .lean<{ id?: unknown; name?: unknown }>()
+
+      if (!brandDoc) {
+        return versionedJson(
+          { success: false, message: 'Brand not found' },
+          { status: 404 },
+        )
+      }
+
+      const brandId =
+        typeof brandDoc.id === 'number'
+          ? brandDoc.id
+          : typeof brandDoc.id === 'string'
+            ? Number(brandDoc.id)
+            : NaN
+
+      if (!Number.isFinite(brandId)) {
+        return versionedJson(
+          { success: false, message: 'Brand record is missing a valid numeric id' },
+          { status: 500 },
+        )
+      }
+
+      const brandName =
+        typeof brandDoc.name === 'string' && brandDoc.name.trim().length > 0
+          ? brandDoc.name.trim()
+          : existing.brand_name
+
+      if (brandId !== existing.brand_id || brandName !== existing.brand_name) {
+        updates.brand_id = brandId
+        updates.brand_name = brandName
+        hasChanges = true
+        brandChanged = true
+      }
+    }
+
+    let iconChanged = false
+    let newIconId: string | null | undefined
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'iconId')) {
+      iconChanged = true
+      if (payload.iconId === null || (typeof payload.iconId === 'string' && payload.iconId.trim().length === 0)) {
+        updates.thumbnail = null
+        newIconId = null
+        hasChanges = true
+      } else if (typeof payload.iconId === 'string') {
+        const trimmed = payload.iconId.trim()
+        if (!Types.ObjectId.isValid(trimmed)) {
+          return versionedJson(
+            { success: false, message: 'Model icon must be a valid ObjectId' },
+            { status: 400 },
+          )
+        }
+        const currentThumbnail = normalizeIconId(existing.thumbnail)
+        if (trimmed !== currentThumbnail) {
+          updates.thumbnail = new Types.ObjectId(trimmed)
+          newIconId = trimmed
+          hasChanges = true
+        }
+      } else {
+        return versionedJson(
+          { success: false, message: 'Model icon must be a string or null' },
+          { status: 400 },
+        )
+      }
+    }
+
+    let imageChanged = false
+    let newImagePath: string | null | undefined
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'imagePath')) {
+      try {
+        newImagePath = sanitizeImagePath(payload.imagePath)
+      } catch (error) {
+        return versionedJson(
+          {
+            success: false,
+            message: error instanceof Error ? error.message : 'Invalid image path',
+          },
+          { status: 400 },
+        )
+      }
+      const currentImage = typeof existing.image === 'string' ? existing.image : null
+      const normalizedCurrent = currentImage ? currentImage.replace(/^\/+/, '') : ''
+      const normalizedNew = newImagePath ?? ''
+      if (normalizedNew !== normalizedCurrent) {
+        updates.image = newImagePath ?? ''
+        imageChanged = true
+        hasChanges = true
+      }
+    }
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'services')) {
+      const servicesInput = Array.isArray(payload.services) ? payload.services : []
+      let services: RawModelService[] = []
+      try {
+        services = servicesInput.map((service) => {
+          if (!service || typeof service !== 'object') {
+            throw new Error('Invalid service payload')
+          }
+
+          const serviceId =
+            typeof (service as { serviceId?: unknown }).serviceId === 'string'
+              ? (service as { serviceId?: string }).serviceId.trim()
+              : ''
+
+          if (!Types.ObjectId.isValid(serviceId)) {
+            throw new Error('Service id must be a valid ObjectId')
+          }
+
+          const discount = Number((service as { discount?: unknown }).discount ?? 0)
+          const originalPrice = Number((service as { originalPrice?: unknown }).originalPrice ?? 0)
+          const discountPrice = Number((service as { discountPrice?: unknown }).discountPrice ?? 0)
+
+          return {
+            services_id: new Types.ObjectId(serviceId),
+            discount: Number.isFinite(discount) ? discount : 0,
+            original_price: Number.isFinite(originalPrice) ? originalPrice : 0,
+            discount_price: Number.isFinite(discountPrice) ? discountPrice : 0,
+          }
+        })
+      } catch (serviceError) {
+        return versionedJson(
+          {
+            success: false,
+            message:
+              serviceError instanceof Error ? serviceError.message : 'Invalid services payload',
+          },
+          { status: 400 },
+        )
+      }
+
+      updates.services = services
+      hasChanges = true
+    }
+
+    if (!hasChanges) {
+      return versionedJson(
+        { success: false, message: 'No updates were provided' },
+        { status: 400 },
+      )
+    }
+
+    const now = new Date()
+    updates.updated_date = now
+
+    const updatedDoc = await Model.findOneAndUpdate({ slug: targetSlug }, { $set: updates }, { new: true })
+
+    if (!updatedDoc) {
+      return versionedJson(
+        { success: false, message: 'Model not found' },
+        { status: 404 },
+      )
+    }
+
+    revalidateTag('models')
+    if (brandChanged) {
+      revalidateTag('brands')
+    }
+
+    const updated = updatedDoc.toObject() as RawModel & { thumbnail?: unknown }
+    const thumbnailId = normalizeIconId(updated.thumbnail)
+
+    const bucket = connection.db ? new GridFSBucket(connection.db, { bucketName: 'fs' }) : null
+    if (iconChanged) {
+      const previousIconId = normalizeIconId(existing.thumbnail)
+      const normalizedNewIconId = typeof newIconId === 'string' ? newIconId : normalizeIconId(updated.thumbnail)
+      if (bucket && previousIconId && previousIconId !== normalizedNewIconId) {
+        try {
+          await bucket.delete(new Types.ObjectId(previousIconId))
+        } catch (deleteError) {
+          console.warn('⚠️ Failed to delete previous model icon:', deleteError)
+        }
+      }
+    }
+
+    if (
+      imageChanged &&
+      typeof existing.image === 'string' &&
+      existing.image.trim().length > 0 &&
+      isManagedModelImagePath(existing.image.replace(/^\/+/, '')) &&
+      updated.image !== existing.image
+    ) {
+      const absolutePath = toAbsoluteImagePath(existing.image)
+      try {
+        await fs.unlink(absolutePath)
+      } catch (deleteError) {
+        if ((deleteError as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.warn('⚠️ Failed to delete previous model image:', deleteError)
+        }
+      }
+    }
+
+    return versionedJson({
+      success: true,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        slug: updated.slug,
+        brand_id: updated.brand_id,
+        brand_name: updated.brand_name,
+        body_type: updated.body_type ?? null,
+        fuel_type: Array.isArray(updated.fuel_type) ? updated.fuel_type : [],
+        thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
+        image: normalizeImagePath(updated.image),
+        services: updated.services ?? [],
+        status: Boolean(updated.status),
+        created_date: normalizeDate(updated.created_date),
+        updated_date: normalizeDate(updated.updated_date) ?? now.toISOString(),
+      },
+    })
+  } catch (error) {
+    console.error('❌ Error updating model:', error)
+    const message = error instanceof Error ? error.message : 'Unable to update model'
+    return versionedJson({ success: false, message }, { status: 500 })
   }
 }
 

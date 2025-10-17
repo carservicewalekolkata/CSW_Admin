@@ -88,7 +88,13 @@ const brandsSlice = createSlice({
   },
 })
 
-export const { useFetchBrandsQuery, useLazyFetchBrandsQuery, useDeleteBrandMutation } = brandsApi
+export const {
+  useFetchBrandsQuery,
+  useLazyFetchBrandsQuery,
+  useDeleteBrandMutation,
+  useCreateBrandMutation,
+  useUpdateBrandMutation,
+} = brandsApi
 export const usePrefetchBrands = () => brandsApi.usePrefetch('fetchBrands')
 export const { clearBrands, setLastQuery } = brandsSlice.actions
 export default brandsSlice.reducer
