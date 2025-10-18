@@ -1,6 +1,10 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import type { ServiceCategory, ServiceCategoryQuery, ServiceCategoryResponse } from '@/types/serviceCategories'
-import { removeCategoryFromList, upsertCategoryIntoList } from '@/utils/serviceCategories'
+import {
+  removeCategoryFromList,
+  resolveServiceCategoryErrorMessage,
+  upsertCategoryIntoList,
+} from '@/utils/serviceCategories'
 import { serviceCategoriesApi } from './serviceCategoriesApi'
 
 export type ServiceCategoryStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
@@ -69,9 +73,12 @@ const serviceCategoriesSlice = createSlice({
           search: query?.search,
         }
       })
-      .addMatcher(serviceCategoriesApi.endpoints.fetchServiceCategories.matchRejected, (state, { error }) => {
+      .addMatcher(serviceCategoriesApi.endpoints.fetchServiceCategories.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to fetch service categories'
+        state.error = resolveServiceCategoryErrorMessage(
+          action.payload ?? action.error,
+          'Failed to fetch service categories',
+        )
       })
 
       // --- Delete ---
@@ -87,9 +94,12 @@ const serviceCategoriesSlice = createSlice({
         }
         state.status = 'succeeded'
       })
-      .addMatcher(serviceCategoriesApi.endpoints.deleteServiceCategory.matchRejected, (state, { error }) => {
+      .addMatcher(serviceCategoriesApi.endpoints.deleteServiceCategory.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to delete service category'
+        state.error = resolveServiceCategoryErrorMessage(
+          action.payload ?? action.error,
+          'Failed to delete service category',
+        )
       })
 
       // --- Create ---
@@ -125,9 +135,12 @@ const serviceCategoriesSlice = createSlice({
           state.total += 1
         }
       })
-      .addMatcher(serviceCategoriesApi.endpoints.createServiceCategory.matchRejected, (state, { error }) => {
+      .addMatcher(serviceCategoriesApi.endpoints.createServiceCategory.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to create service category'
+        state.error = resolveServiceCategoryErrorMessage(
+          action.payload ?? action.error,
+          'Failed to create service category',
+        )
       })
   },
 })

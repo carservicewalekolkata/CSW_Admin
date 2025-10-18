@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
+
 import { APIEndpoint } from '@/APIEndpoints'
 import type {
   CreateServiceCategoryRequest,
@@ -7,80 +8,48 @@ import type {
   ServiceCategoryResponse,
 } from '@/types/serviceCategories'
 
-const baseUrl = APIEndpoint.BackendUrl
 const serviceCategoriesPath = APIEndpoint.services.servicesCategory
 
 export const serviceCategoriesApi = createApi({
   reducerPath: 'serviceCategoriesApi',
   baseQuery: fetchBaseQuery({
-    baseUrl,
-    prepareHeaders: (headers) => {
-      headers.set('Accept', 'application/json')
-      return headers
-    },
+    baseUrl: APIEndpoint.BackendUrl,
   }),
-  tagTypes: ['ServiceCategories'],
-  keepUnusedDataFor: 5 * 60,
-  refetchOnFocus: false,
-  refetchOnReconnect: false,
   endpoints: (builder) => ({
-    /**
-     * GET /services/service-category
-     */
     fetchServiceCategories: builder.query<ServiceCategoryResponse, ServiceCategoryQuery | void>({
       query: (query) => {
         const params = new URLSearchParams()
 
         if (query?.search) params.set('search', query.search)
         if (query?.sortUpdated) params.set('sortUpdated', query.sortUpdated)
-        if (query?.page) params.set('page', String(query.page))
-        if (query?.limit) params.set('limit', String(query.limit))
+        if (typeof query?.page === 'number') params.set('page', String(query.page))
+        if (typeof query?.limit === 'number') params.set('limit', String(query.limit))
 
         return {
-          url: `${serviceCategoriesPath}?${params.toString()}`,
+          url: serviceCategoriesPath,
           method: 'GET',
+          params,
         }
       },
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.data.map(({ id }) => ({
-                type: 'ServiceCategories' as const,
-                id,
-              })),
-              { type: 'ServiceCategories', id: 'LIST' },
-            ]
-          : [{ type: 'ServiceCategories', id: 'LIST' }],
     }),
 
-    /**
-     * DELETE /services/service-category
-     */
     deleteServiceCategory: builder.mutation<void, number>({
       query: (id) => ({
-        url: `${serviceCategoriesPath}`,
+        url: serviceCategoriesPath,
         method: 'DELETE',
         body: { id },
       }),
-      invalidatesTags: (_result, _error, id) => [
-        { type: 'ServiceCategories', id },
-        { type: 'ServiceCategories', id: 'LIST' },
-      ],
     }),
 
-    /**
-     * POST /services/service-category
-     */
     createServiceCategory: builder.mutation<
       ServiceCategoryMutationResponse,
       CreateServiceCategoryRequest
     >({
       query: (body) => ({
-        url: `${serviceCategoriesPath}`,
+        url: serviceCategoriesPath,
         method: 'POST',
         body,
       }),
-      invalidatesTags: [{ type: 'ServiceCategories', id: 'LIST' }],
     }),
   }),
 })
