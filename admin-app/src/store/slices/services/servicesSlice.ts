@@ -1,5 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import type { Service, ServiceQuery, ServiceResponse } from '@/types/services'
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
+
+import type { Service, ServiceResponse } from '@/types/services'
+import { resolveServiceErrorMessage } from '@/utils/serviceDetails'
 import { servicesApi } from './servicesApi'
 
 export type ServicesStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
@@ -11,7 +13,6 @@ export interface ServicesState {
   total: number
   page: number
   limit: number
-  lastQuery: ServiceQuery
 }
 
 const initialState: ServicesState = {
@@ -21,78 +22,86 @@ const initialState: ServicesState = {
   total: 0,
   page: 1,
   limit: 10,
-  lastQuery: {
-    page: 1,
-    limit: 10,
-    sortUpdated: 'desc',
-  },
 }
+
+const findServiceIndex = (items: Service[], id: string) =>
+  items.findIndex((service) => service.id === id)
 
 const servicesSlice = createSlice({
   name: 'services',
   initialState,
   reducers: {
-    clearServices(state) {
-      Object.assign(state, initialState)
+    addService(state, action: PayloadAction<Service>) {
+      const service = action.payload
+      const existingIndex = findServiceIndex(state.items, service.id)
+
+      if (existingIndex !== -1) {
+        state.items[existingIndex] = service
+      } else {
+        state.items.unshift(service)
+        state.total += 1
+      }
     },
-    setLastQuery(state, action: PayloadAction<Partial<ServiceQuery>>) {
-      state.lastQuery = { ...state.lastQuery, ...action.payload }
+    updateService(state, action: PayloadAction<Service>) {
+      const service = action.payload
+      const targetIndex = findServiceIndex(state.items, service.id)
+
+      if (targetIndex !== -1) {
+        state.items[targetIndex] = service
+      } else {
+        state.items.unshift(service)
+        state.total += 1
+      }
     },
+    removeService(state, action: PayloadAction<string>) {
+      const id = action.payload
+      const index = findServiceIndex(state.items, id)
+
+      if (index !== -1) {
+        state.items.splice(index, 1)
+        state.total = Math.max(0, state.total - 1)
+      }
+    },
+    resetServices: () => initialState,
   },
   extraReducers: (builder) => {
     builder
-      // --- Fetch Services ---
       .addMatcher(servicesApi.endpoints.fetchServices.matchPending, (state) => {
         state.status = 'loading'
         state.error = null
       })
-      .addMatcher(servicesApi.endpoints.fetchServices.matchFulfilled, (state, { payload, meta }) => {
-        const query = meta?.arg?.originalArgs as ServiceQuery | undefined
-        const response = payload as ServiceResponse
-
+      .addMatcher(servicesApi.endpoints.fetchServices.matchFulfilled, (state, action) => {
+        const response = action.payload as ServiceResponse
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = response.total ?? 0
-        state.page = response.page ?? 1
-        state.limit = response.limit ?? 10
+        state.total = typeof response.total === 'number' ? response.total : response.count ?? 0
+        state.page = typeof response.page === 'number' ? response.page : 1
+        state.limit = typeof response.limit === 'number' ? response.limit : state.limit
         state.status = 'succeeded'
         state.error = null
-
-        state.lastQuery = {
-          page: state.page,
-          limit: state.limit,
-          sortUpdated: query?.sortUpdated ?? 'desc',
-          search: query?.search,
-          category: query?.category,
-          status: query?.status,
-        }
       })
-      .addMatcher(servicesApi.endpoints.fetchServices.matchRejected, (state, { error }) => {
+      .addMatcher(servicesApi.endpoints.fetchServices.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to fetch services'
-      })
-      .addMatcher(servicesApi.endpoints.deleteService.matchPending, (state) => {
-        state.error = null
-      })
-      .addMatcher(servicesApi.endpoints.deleteService.matchFulfilled, (state, { meta }) => {
-        const id = meta?.arg?.originalArgs as string
-        if (id) {
-          state.items = state.items.filter((service) => service.id !== id)
-          state.total = Math.max(0, state.total - 1)
-        }
-      })
-      .addMatcher(servicesApi.endpoints.deleteService.matchRejected, (state, { error }) => {
-        state.error = error?.message ?? 'Failed to delete service'
+        state.error = resolveServiceErrorMessage(
+          action.payload ?? action.error,
+          'Failed to fetch services',
+        )
       })
   },
 })
 
 export const {
   useFetchServicesQuery,
-  useLazyFetchServicesQuery,
   useCreateServiceMutation,
   useUpdateServiceMutation,
   useDeleteServiceMutation,
 } = servicesApi
 export const usePrefetchServices = () => servicesApi.usePrefetch('fetchServices')
-export const { clearServices, setLastQuery } = servicesSlice.actions
+
+export const {
+  addService,
+  updateService,
+  removeService,
+  resetServices,
+} = servicesSlice.actions
+
 export default servicesSlice.reducer

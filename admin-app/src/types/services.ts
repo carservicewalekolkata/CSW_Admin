@@ -32,7 +32,6 @@ export type ServiceResponse = {
   total: number
   page: number
   limit: number
-  cacheKey?: string
   timestamp: string
   data: Service[]
 }

@@ -31,21 +31,21 @@ export const useServiceDetailsPage = (): UseServiceDetailsPageResult => {
     isTableLoading,
     categoryOptions,
     bannerError,
-    refreshServices,
+    refetchServices,
   } = useServiceDetailsData({ query, page, pageSize })
 
   const formModal = useServiceDetailsForm({
     categoryOptions,
     page,
     setPage,
-    refreshServices,
+    refetchServices,
   })
 
   const deleteModal = useServiceDetailsDelete({
     items,
     safePage,
     setPage,
-    refreshServices,
+    refetchServices,
   })
 
   const filters: ServiceFiltersState = {

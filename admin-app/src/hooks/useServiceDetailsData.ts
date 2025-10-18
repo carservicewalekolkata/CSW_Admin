@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from 'react'
-import { toast } from '@/lib/sonner'
 
 import {
   useFetchServicesQuery,
-  useLazyFetchServicesQuery,
   usePrefetchServices,
 } from '@/store/slices/services/servicesSlice'
 import { useFetchServiceCategoriesQuery } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
+import { useAppSelector } from '@/store/hooks'
 import { resolveServiceErrorMessage } from '@/utils/serviceDetails'
 import type { ServiceCategoryOption } from '@/types/serviceDetailsPage'
 import type { Service, ServiceQuery } from '@/types/services'
@@ -27,7 +26,7 @@ type UseServiceDetailsDataResult = {
   isTableLoading: boolean
   categoryOptions: ServiceCategoryOption[]
   bannerError: string | null
-  refreshServices: (nextPage: number) => Promise<void>
+  refetchServices: () => Promise<unknown>
 }
 
 export const useServiceDetailsData = ({
@@ -35,13 +34,12 @@ export const useServiceDetailsData = ({
   page,
   pageSize,
 }: UseServiceDetailsDataParams): UseServiceDetailsDataResult => {
+  const { items, total, status, error } = useAppSelector((state) => state.services)
   const {
-    data: servicesResponse,
-    error,
     isLoading,
     isFetching,
-  } = useFetchServicesQuery(query)
-  const [fetchServicesLazy, { isFetching: isLazyFetching }] = useLazyFetchServicesQuery()
+    refetch,
+  } = useFetchServicesQuery(query, { refetchOnMountOrArgChange: true })
   const prefetchServices = usePrefetchServices()
 
   const { data: categoriesResponse } = useFetchServiceCategoriesQuery({
@@ -49,13 +47,11 @@ export const useServiceDetailsData = ({
     sortUpdated: 'desc',
   })
 
-  const items = servicesResponse?.data ?? []
-  const total = servicesResponse?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(page, totalPages)
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIndex = total === 0 ? 0 : Math.min(startIndex + Math.max(items.length - 1, 0), total)
-  const isTableLoading = isLoading || isFetching || isLazyFetching
+  const isTableLoading = status === 'loading' || isLoading || isFetching
 
   useEffect(() => {
     if (!prefetchServices) return
@@ -81,15 +77,6 @@ export const useServiceDetailsData = ({
     [error],
   )
 
-  const refreshServices = async (nextPage: number) => {
-    try {
-      const nextQuery = { ...query, page: nextPage }
-      await fetchServicesLazy(nextQuery).unwrap()
-    } catch (err) {
-      toast.error(resolveServiceErrorMessage(err, 'Failed to refresh services'))
-    }
-  }
-
   return {
     items,
     total,
@@ -100,7 +87,7 @@ export const useServiceDetailsData = ({
     isTableLoading,
     categoryOptions,
     bannerError,
-    refreshServices,
+    refetchServices: refetch,
   }
 }
 

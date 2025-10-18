@@ -1,9 +1,13 @@
 import { toast } from '@/lib/sonner'
 
+import { useAppDispatch } from '@/store/hooks'
 import {
+  addService,
+  updateService as updateServiceAction,
   useCreateServiceMutation,
   useUpdateServiceMutation,
 } from '@/store/slices/services/servicesSlice'
+import type { Service } from '@/types/services'
 import type {
   ServiceCategoryOption,
   ServiceFormModalState,
@@ -22,18 +26,19 @@ type UseServiceDetailsFormParams = {
   categoryOptions: ServiceCategoryOption[]
   page: number
   setPage: (value: number) => void
-  refreshServices: (nextPage: number) => Promise<void>
+  refetchServices: () => Promise<unknown>
 }
 
 export const useServiceDetailsForm = ({
   categoryOptions,
   page,
   setPage,
-  refreshServices,
+  refetchServices,
 }: UseServiceDetailsFormParams): ServiceFormModalState => {
   const formState = useServiceDetailsFormState({ categoryOptions })
   const [createService, { isLoading: isCreating }] = useCreateServiceMutation()
   const [updateService, { isLoading: isUpdating }] = useUpdateServiceMutation()
+  const dispatch = useAppDispatch()
 
   const ensureValidCategory = (categoryIdValue: string) => {
     const numeric = Number(categoryIdValue)
@@ -55,6 +60,7 @@ export const useServiceDetailsForm = ({
     if (categoryIdNumber === null) return
 
     try {
+      const imagePathValue = formState.values.imagePath.trim()
       const response = await createService({
         name: trimmedName,
         categoryId: categoryIdNumber,
@@ -63,15 +69,39 @@ export const useServiceDetailsForm = ({
         features: parseServiceFeaturesText(formState.values.featuresText),
         timeTaken: formState.values.timeTaken.trim() || null,
         warranty: formState.values.warranty.trim() || null,
-        imagePath: formState.values.imagePath.trim() || undefined,
+        imagePath: imagePathValue || undefined,
       }).unwrap()
 
-      toast.success(`Created service: ${response.data?.name ?? trimmedName}`)
+      const fallbackService: Service = {
+        id: response.data?.id ?? Math.random().toString(36).slice(2),
+        name: trimmedName,
+        category_id: categoryIdNumber,
+        category_name:
+          response.data?.category_name ??
+          categoryOptions.find((option) => Number(option.id) === categoryIdNumber)?.name ??
+            `Category ${categoryIdNumber}`,
+        service_images: response.data?.service_images ?? (imagePathValue ? [imagePathValue] : []),
+        thumbnail: response.data?.thumbnail ?? (imagePathValue || null),
+        description: response.data?.description ?? formState.values.description.trim() || null,
+        features: response.data?.features ?? parseServiceFeaturesText(formState.values.featuresText),
+        time_taken: response.data?.time_taken ?? formState.values.timeTaken.trim() || null,
+        warranty: response.data?.warranty ?? formState.values.warranty.trim() || null,
+        status: response.data?.status ?? formState.values.status,
+        created_date: response.data?.created_date ?? new Date().toISOString(),
+        updated_date: response.data?.updated_date ?? new Date().toISOString(),
+      }
+
+      const createdService = response.data ?? fallbackService
+      dispatch(addService(createdService))
+
+      toast.success(`Created service: ${createdService.name}`)
       formState.close()
       if (page !== 1) {
         setPage(1)
       }
-      await refreshServices(1)
+      if (!response.data) {
+        await refetchServices()
+      }
     } catch (err) {
       toast.error(resolveServiceErrorMessage(err, 'Failed to create service'))
     }
@@ -96,9 +126,40 @@ export const useServiceDetailsForm = ({
 
     try {
       const response = await updateService(payload).unwrap()
-      toast.success(`Updated service: ${response.data?.name ?? trimmedName}`)
+      const updatedService: Service = response.data ?? {
+        ...formState.editingService,
+        name: trimmedName,
+        category_id: payload.categoryId ?? formState.editingService.category_id,
+        category_name:
+          payload.categoryId !== undefined
+            ? categoryOptions.find((option) => Number(option.id) === payload.categoryId)?.name ??
+              formState.editingService.category_name
+            : formState.editingService.category_name,
+        status: payload.status ?? formState.editingService.status,
+        description: payload.description ?? formState.editingService.description,
+        features: payload.features ?? formState.editingService.features,
+        time_taken: payload.timeTaken ?? formState.editingService.time_taken,
+        warranty: payload.warranty ?? formState.editingService.warranty,
+        service_images:
+          payload.imagePath !== undefined
+            ? payload.imagePath
+              ? [payload.imagePath]
+              : []
+            : formState.editingService.service_images,
+        thumbnail:
+          payload.imagePath !== undefined
+            ? payload.imagePath
+              ? payload.imagePath
+              : null
+            : formState.editingService.thumbnail,
+        updated_date: new Date().toISOString(),
+      }
+
+      dispatch(updateServiceAction(updatedService))
+
+      toast.success(`Updated service: ${updatedService.name}`)
       formState.close()
-      await refreshServices(page)
+      await refetchServices()
     } catch (err) {
       toast.error(resolveServiceErrorMessage(err, 'Failed to update service'))
     }

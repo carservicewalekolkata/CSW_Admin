@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { Types } from 'mongoose'
-import { revalidateTag, unstable_cache } from 'next/cache'
 
 import { versionedJson } from '@/server/apiVersion'
 import { applyCors, corsPreflight } from '@/server/cors'
@@ -202,11 +201,23 @@ const mapServiceDocument = (service: RawService & { _id?: unknown }) => {
   }
 }
 
-const buildCacheKey = ({ search, category, status, sortUpdated, page, limit }: QueryParams) =>
-  JSON.stringify({ search, category, status, sortUpdated, page, limit })
+export const GET = async (request: Request) => {
+  try {
+    const url = new URL(request.url)
+    const searchParams = url.searchParams
 
-const getServicesCached = unstable_cache(
-  async (params: QueryParams) => {
+    const statusParam = searchParams.get('status')
+    const status = statusParam === 'active' || statusParam === 'inactive' ? statusParam : undefined
+
+    const query: QueryParams = {
+      search: searchParams.get('search') || undefined,
+      category: parseCategoryId(searchParams.get('category')),
+      status,
+      sortUpdated: (searchParams.get('sortUpdated') as QueryParams['sortUpdated']) ?? 'desc',
+      page: parseNumber(searchParams.get('page'), 1),
+      limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
+    }
+
     const mongooseInstance = await connectToDatabase()
     const connection = mongooseInstance.connection
 
@@ -223,7 +234,7 @@ const getServicesCached = unstable_cache(
       sortUpdated = 'desc',
       page = 1,
       limit = 10,
-    } = params
+    } = query
 
     const filters: Record<string, unknown> = {}
 
@@ -272,32 +283,6 @@ const getServicesCached = unstable_cache(
       Service.countDocuments(filters),
     ])
 
-    return { results, total }
-  },
-  ['services-query-cache'],
-  { revalidate: 60, tags: ['services'] },
-)
-
-export const GET = async (request: Request) => {
-  try {
-    const url = new URL(request.url)
-    const searchParams = url.searchParams
-
-    const statusParam = searchParams.get('status')
-    const status = statusParam === 'active' || statusParam === 'inactive' ? statusParam : undefined
-
-    const query: QueryParams = {
-      search: searchParams.get('search') || undefined,
-      category: parseCategoryId(searchParams.get('category')),
-      status,
-      sortUpdated: (searchParams.get('sortUpdated') as QueryParams['sortUpdated']) ?? 'desc',
-      page: parseNumber(searchParams.get('page'), 1),
-      limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
-    }
-
-    const cacheKey = buildCacheKey(query)
-    const { results, total } = await getServicesCached(query)
-
     const data = results.map((service) => mapServiceDocument(service))
 
     return applyCors(
@@ -309,13 +294,12 @@ export const GET = async (request: Request) => {
           total,
           page: query.page,
           limit: query.limit,
-          cacheKey,
           timestamp: new Date().toISOString(),
           data,
         },
         {
           headers: {
-            'Cache-Control': 'public, max-age=60',
+            'Cache-Control': 'no-store',
           },
         },
       ),
@@ -436,8 +420,6 @@ export const POST = async (request: Request) => {
       created_date: now,
       updated_date: now,
     })
-
-    revalidateTag('services')
 
     const created = createdDoc.toObject() as RawService & { _id?: unknown }
 
@@ -646,8 +628,6 @@ export const PATCH = async (request: Request) => {
       )
     }
 
-    revalidateTag('services')
-
     const updated = updatedDoc.toObject() as RawService & { _id?: unknown }
 
     if (payload?.previousImagePath) {
@@ -710,8 +690,6 @@ export const DELETE = async (request: Request) => {
         versionedJson({ success: false, message: 'Service not found' }, { status: 404 }),
       )
     }
-
-    revalidateTag('services')
 
     const thumbnail = sanitizeNullableString((deleted.toObject() as RawService)?.thumbnail)
     const normalizedThumbnail = thumbnail ? thumbnail.replace(/^\/+/, '') : null
