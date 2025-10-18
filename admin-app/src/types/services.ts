@@ -8,6 +8,7 @@ export interface Service {
   category_name: string
   service_images: string[]
   thumbnail: string | null
+  image_path: string | null
   description: string | null
   features: string[]
   time_taken: string | null

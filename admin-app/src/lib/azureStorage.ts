@@ -63,12 +63,19 @@ const getBlockBlobClient = async (blobName: string): Promise<BlockBlobClient> =>
   return client.getBlockBlobClient(sanitizedName)
 }
 
-export const AZURE_MODEL_IMAGE_SCHEME = 'azure:'
+export const AZURE_STORAGE_SCHEME = 'azure:'
+export const AZURE_MODEL_IMAGE_SCHEME = AZURE_STORAGE_SCHEME
 
 export const buildModelImageProxyUrl = (blobName: string) => {
   const sanitized = sanitizeBlobName(blobName)
   const encoded = sanitized.split('/').map(encodeURIComponent).join('/')
   return `/api/v1/cars/models/image/blob/${encoded}`
+}
+
+export const buildServiceImageProxyUrl = (blobName: string) => {
+  const sanitized = sanitizeBlobName(blobName)
+  const encoded = sanitized.split('/').map(encodeURIComponent).join('/')
+  return `/api/v1/services/details/image/blob/${encoded}`
 }
 
 export const uploadModelImage = async (blobName: string, data: Buffer, contentType?: string) => {
@@ -83,15 +90,23 @@ export const uploadModelImage = async (blobName: string, data: Buffer, contentTy
   })
 }
 
+export const uploadServiceImage = async (blobName: string, data: Buffer, contentType?: string) =>
+  uploadModelImage(blobName, data, contentType)
+
 export const deleteModelImageIfExists = async (blobName: string) => {
   const blobClient = await getBlockBlobClient(blobName)
   await blobClient.deleteIfExists()
 }
 
+export const deleteServiceImageIfExists = async (blobName: string) =>
+  deleteModelImageIfExists(blobName)
+
 export const downloadModelImage = async (blobName: string) => {
   const blobClient = await getBlockBlobClient(blobName)
   return blobClient.download()
 }
+
+export const downloadServiceImage = async (blobName: string) => downloadModelImage(blobName)
 
 export const extractModelImageBlobName = (value: string | null | undefined) => {
   if (!value) {
@@ -134,3 +149,6 @@ export const extractModelImageBlobName = (value: string | null | undefined) => {
 
 export const isAzureManagedModelImage = (value: string | null | undefined) =>
   Boolean(extractModelImageBlobName(value))
+
+export const extractServiceImageBlobName = extractModelImageBlobName
+export const isAzureManagedServiceImage = isAzureManagedModelImage

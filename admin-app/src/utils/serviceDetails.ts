@@ -35,8 +35,21 @@ export const resolveServicePreviewImage = (service: Service) => {
 }
 
 export const extractRelativeServiceImagePath = (service: Service) => {
+  if (service.image_path) {
+    return service.image_path
+  }
+
   const source = service.thumbnail ?? service.service_images?.[0] ?? ''
   if (!source) return ''
+
+  if (source.startsWith('azure:')) {
+    return source
+  }
+
+  if (/^https?:\/\//i.test(source)) {
+    return source
+  }
+
   return source.replace(/^\/+/, '')
 }
 

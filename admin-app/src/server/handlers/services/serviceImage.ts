@@ -1,11 +1,13 @@
-import { promises as fs } from 'fs'
-import path from 'path'
 import { NextRequest } from 'next/server'
 
 import { applyCors, corsPreflight } from '@/server/cors'
 import { versionedJson } from '@/server/apiVersion'
-
-const SERVICES_IMAGE_DIR = path.join(process.cwd(), 'public', 'assets', 'services')
+import {
+  AZURE_STORAGE_SCHEME,
+  buildServiceImageProxyUrl,
+  uploadServiceImage,
+} from '@/lib/azureStorage'
+import path from 'path'
 
 const allowedMimeTypes = new Map<string, string>([
   ['image/png', '.png'],
@@ -87,20 +89,21 @@ export async function POST(request: NextRequest) {
     const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const finalFilename = `${safeBase}-${uniqueSuffix}${extension}`
 
-    await fs.mkdir(SERVICES_IMAGE_DIR, { recursive: true })
-    const absolutePath = path.join(SERVICES_IMAGE_DIR, finalFilename)
     const buffer = Buffer.from(await file.arrayBuffer())
-    await fs.writeFile(absolutePath, buffer)
 
-    const relativePath = path.posix.join('assets', 'services', finalFilename)
+    const blobPath = path.posix.join('services', finalFilename)
+    await uploadServiceImage(blobPath, buffer, file.type || undefined)
+
+    const storagePath = `${AZURE_STORAGE_SCHEME}${blobPath}`
+    const proxyUrl = buildServiceImageProxyUrl(blobPath)
 
     return applyCors(
       request,
       versionedJson(
         {
           success: true,
-          path: relativePath,
-          url: `/${relativePath}`,
+          path: storagePath,
+          url: proxyUrl,
         },
         {
           status: 201,

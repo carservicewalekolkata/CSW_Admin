@@ -6,6 +6,12 @@ import { versionedJson } from '@/server/apiVersion'
 import { applyCors, corsPreflight } from '@/server/cors'
 import { connectToDatabase } from '@/lib/db'
 import { getServiceCategoryModel, getServiceModel } from '@/models'
+import {
+  AZURE_STORAGE_SCHEME,
+  buildServiceImageProxyUrl,
+  deleteServiceImageIfExists,
+  extractServiceImageBlobName,
+} from '@/lib/azureStorage'
 
 type RawService = {
   _id?: unknown
@@ -118,23 +124,16 @@ const sanitizeImagePath = (value: unknown): string | null => {
     return null
   }
 
+  const blobName = extractServiceImageBlobName(trimmed)
+  if (blobName) {
+    return `${AZURE_STORAGE_SCHEME}${blobName}`
+  }
+
   if (trimmed.includes('..')) {
     throw new Error('Invalid image path')
   }
 
   return trimmed.replace(/^\/+/, '')
-}
-
-const normalizeImagePath = (value?: string | null): string | null => {
-  if (!value) {
-    return null
-  }
-
-  if (/^https?:\/\//i.test(value)) {
-    return value
-  }
-
-  return `/${value.replace(/^\/+/, '')}`
 }
 
 const SERVICE_IMAGE_PREFIX = 'assets/services/'
@@ -175,11 +174,56 @@ const sanitizeFeaturesInput = (value: unknown): string[] => {
   return Array.from(unique)
 }
 
+type ResolvedServiceImage = {
+  view: string | null
+  raw: string | null
+}
+
+const resolveServiceImage = (value?: string | null): ResolvedServiceImage => {
+  if (!value) {
+    return { view: null, raw: null }
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return { view: null, raw: null }
+  }
+
+  const blobName = extractServiceImageBlobName(trimmed)
+  if (blobName) {
+    return {
+      view: buildServiceImageProxyUrl(blobName),
+      raw: `${AZURE_STORAGE_SCHEME}${blobName}`,
+    }
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return { view: trimmed, raw: trimmed }
+  }
+
+  const normalized = trimmed.replace(/^\/+/, '')
+  if (!normalized) {
+    return { view: null, raw: null }
+  }
+
+  return {
+    view: `/${normalized}`,
+    raw: normalized,
+  }
+}
+
 const mapServiceDocument = (service: RawService & { _id?: unknown }) => {
   const rawImages = sanitizeStringArray(service.service_images)
-  const normalizedImages = rawImages
-    .map((image) => normalizeImagePath(image))
+  const imageInfos = rawImages.map((image) => resolveServiceImage(image))
+
+  const serviceImages = imageInfos
+    .map((image) => image.view)
     .filter((image): image is string => Boolean(image))
+  const primaryImageRaw = imageInfos.find((image) => image.raw)?.raw ?? null
+
+  const thumbnailInfo = resolveServiceImage(sanitizeNullableString(service.thumbnail))
+  const thumbnailView = thumbnailInfo.view ?? serviceImages[0] ?? null
+  const thumbnailRaw = thumbnailInfo.raw ?? primaryImageRaw
 
   return {
     id: normalizeObjectId(service._id),
@@ -189,8 +233,9 @@ const mapServiceDocument = (service: RawService & { _id?: unknown }) => {
         ? service.category_id
         : 0,
     category_name: typeof service.category_name === 'string' ? service.category_name : '',
-    service_images: normalizedImages,
-    thumbnail: normalizeImagePath(sanitizeNullableString(service.thumbnail)),
+    service_images: serviceImages,
+    thumbnail: thumbnailView,
+    image_path: thumbnailRaw,
     description: sanitizeNullableString(service.description),
     features: sanitizeStringArray(service.features),
     time_taken: sanitizeNullableString(service.time_taken),
@@ -230,7 +275,7 @@ export const GET = async (request: Request) => {
     const {
       search: searchTerm,
       category,
-      status,
+      status: statusFilter,
       sortUpdated = 'desc',
       page = 1,
       limit = 10,
@@ -246,9 +291,9 @@ export const GET = async (request: Request) => {
       filters.category_id = category
     }
 
-    if (status === 'active') {
+    if (statusFilter === 'active') {
       filters.status = true
-    } else if (status === 'inactive') {
+    } else if (statusFilter === 'inactive') {
       filters.status = false
     }
 
@@ -630,22 +675,43 @@ export const PATCH = async (request: Request) => {
 
     const updated = updatedDoc.toObject() as RawService & { _id?: unknown }
 
-    if (payload?.previousImagePath) {
-      const previousPath = sanitizeNullableString(payload.previousImagePath)
-      const formattedPrevious = previousPath ? previousPath.replace(/^\/+/, '') : null
-      const currentRelative = sanitizeNullableString(updated.thumbnail)
-      const normalizedCurrentRelative = currentRelative ? currentRelative.replace(/^\/+/, '') : null
-
-      if (
-        formattedPrevious &&
-        formattedPrevious !== normalizedCurrentRelative &&
-        isManagedServiceImagePath(formattedPrevious)
-      ) {
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'previousImagePath')) {
+      const previousInput = sanitizeNullableString(payload.previousImagePath)
+      let sanitizedPrevious: string | null = null
+      if (previousInput) {
         try {
-          await fs.unlink(toAbsoluteServiceImagePath(formattedPrevious))
+          sanitizedPrevious = sanitizeImagePath(previousInput)
+        } catch {
+          sanitizedPrevious = null
+        }
+      }
+
+      const currentRaw = sanitizeNullableString(updated.thumbnail)
+
+      const previousBlob = sanitizedPrevious ? extractServiceImageBlobName(sanitizedPrevious) : null
+      const currentBlob = currentRaw ? extractServiceImageBlobName(currentRaw) : null
+
+      if (previousBlob && previousBlob !== currentBlob) {
+        try {
+          await deleteServiceImageIfExists(previousBlob)
         } catch (err) {
-          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-            console.warn('⚠️ Failed to delete previous service image:', err)
+          console.warn('⚠️ Failed to delete previous service image blob:', err)
+        }
+      } else if (sanitizedPrevious && !previousBlob) {
+        const formattedPrevious = sanitizedPrevious.replace(/^\/+/, '')
+        const normalizedCurrent = currentRaw ? currentRaw.replace(/^\/+/, '') : null
+
+        if (
+          formattedPrevious &&
+          formattedPrevious !== normalizedCurrent &&
+          isManagedServiceImagePath(formattedPrevious)
+        ) {
+          try {
+            await fs.unlink(toAbsoluteServiceImagePath(formattedPrevious))
+          } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+              console.warn('⚠️ Failed to delete previous service image:', err)
+            }
           }
         }
       }
@@ -691,17 +757,41 @@ export const DELETE = async (request: Request) => {
       )
     }
 
-    const thumbnail = sanitizeNullableString((deleted.toObject() as RawService)?.thumbnail)
-    const normalizedThumbnail = thumbnail ? thumbnail.replace(/^\/+/, '') : null
-    if (normalizedThumbnail && isManagedServiceImagePath(normalizedThumbnail)) {
-      try {
-        await fs.unlink(toAbsoluteServiceImagePath(normalizedThumbnail))
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-          console.warn('⚠️ Failed to delete service image:', err)
+    const deletedRaw = deleted.toObject() as RawService
+    const thumbnailRaw = sanitizeNullableString(deletedRaw.thumbnail)
+    const additionalImages = sanitizeStringArray(deletedRaw.service_images)
+
+    const imagesToRemove = [thumbnailRaw, ...additionalImages]
+
+    await Promise.all(
+      imagesToRemove.map(async (image) => {
+        if (typeof image !== 'string' || !image.trim()) {
+          return
         }
-      }
-    }
+
+        const trimmed = image.trim()
+        const blobName = extractServiceImageBlobName(trimmed)
+        if (blobName) {
+          try {
+            await deleteServiceImageIfExists(blobName)
+          } catch (err) {
+            console.warn('⚠️ Failed to delete service image blob:', err)
+          }
+          return
+        }
+
+        const formatted = trimmed.replace(/^\/+/, '')
+        if (formatted && isManagedServiceImagePath(formatted)) {
+          try {
+            await fs.unlink(toAbsoluteServiceImagePath(formatted))
+          } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+              console.warn('⚠️ Failed to delete service image:', err)
+            }
+          }
+        }
+      }),
+    )
 
     return applyCors(
       request,

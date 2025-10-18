@@ -143,7 +143,7 @@ const ServiceDetailsFormModal = ({ modal }: ServiceDetailsFormModalProps) => {
                   type="text"
                   value={modal.values.imagePath}
                   onChange={(event) => modal.onFieldChange('imagePath', event.target.value)}
-                  placeholder="assets/services/..."
+                  placeholder="azure:services/..."
                   className="rounded-lg border border-brand-100/80 bg-white px-3 py-2 text-sm"
                 />
               </label>

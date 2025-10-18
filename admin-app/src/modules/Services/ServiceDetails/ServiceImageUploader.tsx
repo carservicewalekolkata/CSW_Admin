@@ -51,9 +51,7 @@ const ServiceImageUploader = forwardRef<HTMLInputElement, ServiceImageUploaderPr
               Remove
             </button>
           </div>
-          <p className="text-xs text-brand-500">
-            Stored in <code>public/assets/services</code>. 4&nbsp;MB limit.
-          </p>
+          <p className="text-xs text-brand-500">Uploaded to Azure Blob Storage. 4&nbsp;MB limit.</p>
           {imageError ? <p className="text-xs text-rose-600">{imageError}</p> : null}
         </div>
       </div>

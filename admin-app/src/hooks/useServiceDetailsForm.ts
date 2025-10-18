@@ -22,6 +22,26 @@ import useServiceDetailsFormState from '@/hooks/useServiceDetailsFormState'
 
 const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024
 
+const AZURE_SCHEME = 'azure:'
+
+const toServiceImageView = (raw: string | null | undefined) => {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+
+  if (trimmed.startsWith(AZURE_SCHEME)) {
+    const blobPath = trimmed.slice(AZURE_SCHEME.length)
+    const encoded = blobPath.split('/').map(encodeURIComponent).join('/')
+    return `/api/v1/services/details/image/blob/${encoded}`
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  return `/${trimmed.replace(/^\/+/g, '')}`
+}
+
 type UseServiceDetailsFormParams = {
   categoryOptions: ServiceCategoryOption[]
   page: number
@@ -80,12 +100,20 @@ export const useServiceDetailsForm = ({
           response.data?.category_name ??
           categoryOptions.find((option) => Number(option.id) === categoryIdNumber)?.name ??
             `Category ${categoryIdNumber}`,
-        service_images: response.data?.service_images ?? (imagePathValue ? [imagePathValue] : []),
-        thumbnail: response.data?.thumbnail ?? (imagePathValue || null),
-        description: response.data?.description ?? formState.values.description.trim() || null,
-        features: response.data?.features ?? parseServiceFeaturesText(formState.values.featuresText),
-        time_taken: response.data?.time_taken ?? formState.values.timeTaken.trim() || null,
-        warranty: response.data?.warranty ?? formState.values.warranty.trim() || null,
+        service_images:
+          response.data?.service_images ??
+          (() => {
+            const view = toServiceImageView(imagePathValue || null)
+            return view ? [view] : []
+          })(),
+        thumbnail:
+          response.data?.thumbnail ?? toServiceImageView(imagePathValue || null),
+        image_path: response.data?.image_path ?? (imagePathValue || null),
+        description: (response.data?.description ?? formState.values.description.trim()) || null,
+        features:
+          response.data?.features ?? parseServiceFeaturesText(formState.values.featuresText),
+        time_taken: (response.data?.time_taken ?? formState.values.timeTaken.trim()) || null,
+        warranty: (response.data?.warranty ?? formState.values.warranty.trim()) || null,
         status: response.data?.status ?? formState.values.status,
         created_date: response.data?.created_date ?? new Date().toISOString(),
         updated_date: response.data?.updated_date ?? new Date().toISOString(),
@@ -126,6 +154,15 @@ export const useServiceDetailsForm = ({
 
     try {
       const response = await updateService(payload).unwrap()
+      const nextRawImagePath =
+        payload.imagePath !== undefined
+          ? payload.imagePath ?? null
+          : formState.editingService.image_path
+      const nextImageView =
+        payload.imagePath !== undefined
+          ? toServiceImageView(nextRawImagePath)
+          : null
+
       const updatedService: Service = response.data ?? {
         ...formState.editingService,
         name: trimmedName,
@@ -142,16 +179,15 @@ export const useServiceDetailsForm = ({
         warranty: payload.warranty ?? formState.editingService.warranty,
         service_images:
           payload.imagePath !== undefined
-            ? payload.imagePath
-              ? [payload.imagePath]
+            ? nextImageView
+              ? [nextImageView]
               : []
             : formState.editingService.service_images,
         thumbnail:
           payload.imagePath !== undefined
-            ? payload.imagePath
-              ? payload.imagePath
-              : null
+            ? nextImageView
             : formState.editingService.thumbnail,
+        image_path: nextRawImagePath ?? null,
         updated_date: new Date().toISOString(),
       }
 
