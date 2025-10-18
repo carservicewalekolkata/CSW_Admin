@@ -1,5 +1,3 @@
-import { revalidateTag, unstable_cache } from 'next/cache'
-
 import { versionedJson } from '@/server/apiVersion'
 import { applyCors, corsPreflight } from '@/server/cors'
 import { connectToDatabase } from '@/lib/db'
@@ -42,11 +40,18 @@ const parseNumber = (value: string | null, fallback: number, min = 1, max = 100)
   return Math.min(max, Math.max(min, Math.floor(parsed)))
 }
 
-const buildCacheKey = ({ search, sortUpdated, page, limit }: QueryParams) =>
-  JSON.stringify({ search, sortUpdated, page, limit })
+export const GET = async (request: Request) => {
+  try {
+    const url = new URL(request.url)
+    const searchParams = url.searchParams
 
-const getServiceCategoriesCached = unstable_cache(
-  async (params: QueryParams) => {
+    const query: QueryParams = {
+      search: searchParams.get('search') || undefined,
+      sortUpdated: (searchParams.get('sortUpdated') as QueryParams['sortUpdated']) ?? 'desc',
+      page: parseNumber(searchParams.get('page'), 1),
+      limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
+    }
+
     const mongooseInstance = await connectToDatabase()
     const connection = mongooseInstance.connection
 
@@ -56,7 +61,7 @@ const getServiceCategoriesCached = unstable_cache(
 
     const ServiceCategory = getServiceCategoryModel(connection)
 
-    const { search, sortUpdated = 'desc', page = 1, limit = 10 } = params
+    const { search, sortUpdated = 'desc', page = 1, limit = 10 } = query
 
     const filters: Record<string, unknown> = {}
 
@@ -81,27 +86,6 @@ const getServiceCategoriesCached = unstable_cache(
       ServiceCategory.countDocuments(filters),
     ])
 
-    return { results, total }
-  },
-  ['service-categories-query-cache'],
-  { revalidate: 60, tags: ['service-categories'] },
-)
-
-export const GET = async (request: Request) => {
-  try {
-    const url = new URL(request.url)
-    const searchParams = url.searchParams
-
-    const query: QueryParams = {
-      search: searchParams.get('search') || undefined,
-      sortUpdated: (searchParams.get('sortUpdated') as QueryParams['sortUpdated']) ?? 'desc',
-      page: parseNumber(searchParams.get('page'), 1),
-      limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
-    }
-
-    const cacheKey = buildCacheKey(query)
-    const { results, total } = await getServiceCategoriesCached(query)
-
     const data: ServiceCategory[] = results.map((item) => ({
       id: item.id,
       name: item.name,
@@ -118,7 +102,6 @@ export const GET = async (request: Request) => {
           total,
           page: query.page,
           limit: query.limit,
-          cacheKey,
           timestamp: new Date().toISOString(),
           data,
         },
@@ -187,8 +170,6 @@ export const POST = async (request: Request) => {
       created_date: now,
       updated_date: now,
     })
-
-    revalidateTag('service-categories')
 
     return versionedJson(
       {
@@ -262,8 +243,6 @@ export const PATCH = async (request: Request) => {
       )
     }
 
-    revalidateTag('service-categories')
-
     return versionedJson({
       success: true,
       data: {
@@ -308,8 +287,6 @@ export const DELETE = async (request: Request) => {
         { status: 404 },
       )
     }
-
-    revalidateTag('service-categories')
 
     return versionedJson(
       {
