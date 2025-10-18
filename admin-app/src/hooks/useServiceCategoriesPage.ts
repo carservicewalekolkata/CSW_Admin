@@ -6,13 +6,12 @@ import {
   useDeleteServiceCategoryMutation,
   usePrefetchServiceCategories,
   useCreateServiceCategoryMutation,
-  useLazyFetchServiceCategoriesQuery,
   addServiceCategory,
   updateServiceCategory as updateServiceCategoryAction,
   removeServiceCategory,
   useUpdateServiceCategoryMutation,
 } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
-import type { ServiceCategory, ServiceCategoryQuery } from '@/types/serviceCategories'
+import type { ServiceCategory } from '@/types/serviceCategories'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { resolveServiceCategoryErrorMessage } from '@/utils/serviceCategories'
 import type {
@@ -48,11 +47,12 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
 
   const dispatch = useAppDispatch()
 
-  const { error, isLoading, isFetching } = useFetchServiceCategoriesQuery(query)
+  const { error, isLoading, isFetching, refetch } = useFetchServiceCategoriesQuery(query, {
+    refetchOnMountOrArgChange: true,
+  })
   const [deleteServiceCategory] = useDeleteServiceCategoryMutation()
   const [createServiceCategory, { isLoading: isCreating }] = useCreateServiceCategoryMutation()
   const [updateServiceCategory, { isLoading: isUpdating }] = useUpdateServiceCategoryMutation()
-  const [fetchServiceCategoriesLazy, { isFetching: isLazyFetching }] = useLazyFetchServiceCategoriesQuery()
   const prefetchServiceCategories = usePrefetchServiceCategories()
   const { items, total, status: categoriesStatus } = useAppSelector((state) => state.serviceCategories)
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -60,7 +60,7 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIndex =
     total === 0 ? 0 : Math.min(startIndex + Math.max(items.length - 1, 0), total)
-  const isTableLoading = isLoading || isFetching || isLazyFetching || categoriesStatus === 'loading'
+  const isTableLoading = isLoading || isFetching || categoriesStatus === 'loading'
 
   useEffect(() => {
     if (!prefetchServiceCategories) return
@@ -78,21 +78,6 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
     () => (error ? resolveServiceCategoryErrorMessage(error, DEFAULT_ERROR_MESSAGE) : null),
     [error],
   )
-
-  const refreshWithLatestQuery = async (nextPage: number) => {
-    const queryToUse: ServiceCategoryQuery = {
-      ...query,
-      page: nextPage,
-      limit: pageSize,
-    }
-
-    try {
-      await fetchServiceCategoriesLazy(queryToUse).unwrap()
-    } catch (err) {
-      const message = resolveServiceCategoryErrorMessage(err, DEFAULT_ERROR_MESSAGE)
-      toast.error(message)
-    }
-  }
 
   const openCreateModal = () => {
     setIsCreateModalOpen(true)
@@ -127,8 +112,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
       if (page !== 1) {
         setPage(1)
       }
-      if (!createdCategory || page !== 1) {
-        await refreshWithLatestQuery(1)
+      if (!createdCategory) {
+        await refetch()
       }
     } catch (err) {
       const message = resolveServiceCategoryErrorMessage(err, 'Failed to create service category')
@@ -151,7 +136,7 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
       if (shouldMovePrev) {
         setPage(nextPage)
       }
-      await refreshWithLatestQuery(nextPage)
+      await refetch()
     } catch (err) {
       const message = resolveServiceCategoryErrorMessage(err, 'Failed to delete service category')
       toast.error(message)
@@ -237,7 +222,7 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
       dispatch(updateServiceCategoryAction(updatedCategory))
       toast.success(`Updated category: ${updatedCategory.name}`)
       closeEditModal()
-      await refreshWithLatestQuery(page)
+      await refetch()
     } catch (err) {
       const message = resolveServiceCategoryErrorMessage(err, 'Failed to update service category')
       setEditError(message)
