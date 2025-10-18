@@ -1,6 +1,11 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { APIEndpoint } from '@/APIEndpoints'
-import type { ServiceCategoryQuery, ServiceCategoryResponse } from '@/types/serviceCategories'
+import type {
+  CreateServiceCategoryRequest,
+  ServiceCategoryMutationResponse,
+  ServiceCategoryQuery,
+  ServiceCategoryResponse,
+} from '@/types/serviceCategories'
 
 const baseUrl = APIEndpoint.BackendUrl
 const serviceCategoriesPath = APIEndpoint.services.servicesCategory
@@ -62,6 +67,21 @@ export const serviceCategoriesApi = createApi({
         { type: 'ServiceCategories', id: 'LIST' },
       ],
     }),
+
+    /**
+     * POST /services/service-category
+     */
+    createServiceCategory: builder.mutation<
+      ServiceCategoryMutationResponse,
+      CreateServiceCategoryRequest
+    >({
+      query: (body) => ({
+        url: `${serviceCategoriesPath}`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: [{ type: 'ServiceCategories', id: 'LIST' }],
+    }),
   }),
 })
 
@@ -69,4 +89,5 @@ export const {
   useFetchServiceCategoriesQuery,
   useLazyFetchServiceCategoriesQuery,
   useDeleteServiceCategoryMutation,
+  useCreateServiceCategoryMutation,
 } = serviceCategoriesApi

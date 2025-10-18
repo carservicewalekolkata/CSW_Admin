@@ -1,0 +1,82 @@
+import { useMemo, useState } from 'react'
+
+import type { BrandSortStatus, BrandSortUpdated, ModelQuery } from '@/types/models'
+
+type UseModelFiltersResult = {
+  query: ModelQuery
+  searchName: string
+  slug: string
+  brand: string
+  statusSort: BrandSortStatus
+  dateSort: BrandSortUpdated
+  pageSize: number
+  page: number
+  setPage: (value: number) => void
+  handleNameChange: (value: string) => void
+  handleSlugChange: (value: string) => void
+  handleBrandChange: (value: string) => void
+  handleStatusSortChange: (value: BrandSortStatus) => void
+  handleDateSortChange: (value: BrandSortUpdated) => void
+  handlePageSizeChange: (value: number) => void
+}
+
+export const useModelFilters = (): UseModelFiltersResult => {
+  const [searchName, setSearchName] = useState('')
+  const [slugFilter, setSlugFilter] = useState('')
+  const [brandFilter, setBrandFilter] = useState('')
+  const [statusSort, setStatusSort] = useState<BrandSortStatus>('none')
+  const [dateSort, setDateSort] = useState<BrandSortUpdated>('desc')
+  const [pageSize, setPageSize] = useState(10)
+  const [page, setPage] = useState(1)
+
+  const query = useMemo<ModelQuery>(
+    () => ({
+      search: searchName || undefined,
+      slug: slugFilter || undefined,
+      brand: brandFilter || undefined,
+      sortStatus: statusSort,
+      sortUpdated: dateSort,
+      page,
+      limit: pageSize,
+    }),
+    [searchName, slugFilter, brandFilter, statusSort, dateSort, page, pageSize],
+  )
+
+  return {
+    query,
+    searchName,
+    slug: slugFilter,
+    brand: brandFilter,
+    statusSort,
+    dateSort,
+    pageSize,
+    page,
+    setPage,
+    handleNameChange: (value: string) => {
+      setPage(1)
+      setSearchName(value)
+    },
+    handleSlugChange: (value: string) => {
+      setPage(1)
+      setSlugFilter(value)
+    },
+    handleBrandChange: (value: string) => {
+      setPage(1)
+      setBrandFilter(value)
+    },
+    handleStatusSortChange: (value: BrandSortStatus) => {
+      setPage(1)
+      setStatusSort(value)
+    },
+    handleDateSortChange: (value: BrandSortUpdated) => {
+      setPage(1)
+      setDateSort(value)
+    },
+    handlePageSizeChange: (value: number) => {
+      setPage(1)
+      setPageSize(value)
+    },
+  }
+}
+
+export default useModelFilters

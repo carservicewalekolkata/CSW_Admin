@@ -20,10 +20,6 @@ export const modelsApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Models'],
-  keepUnusedDataFor: 5 * 60,
-  refetchOnFocus: false,
-  refetchOnReconnect: false,
   endpoints: (builder) => ({
     /**
      * GET /cars/models
@@ -47,13 +43,6 @@ export const modelsApi = createApi({
           method: 'GET',
         }
       },
-      providesTags: (result) =>
-        result
-          ? [
-              ...result.data.map(({ slug }) => ({ type: 'Models' as const, id: slug })),
-              { type: 'Models', id: 'LIST' },
-            ]
-          : [{ type: 'Models', id: 'LIST' }],
     }),
 
     /**
@@ -65,10 +54,6 @@ export const modelsApi = createApi({
         method: 'DELETE',
         body: { slug },
       }),
-      invalidatesTags: (_result, _error, slug) => [
-        { type: 'Models', id: slug },
-        { type: 'Models', id: 'LIST' },
-      ],
     }),
 
     /**
@@ -80,7 +65,6 @@ export const modelsApi = createApi({
         method: 'POST',
         body,
       }),
-      invalidatesTags: [{ type: 'Models', id: 'LIST' }],
     }),
 
     /**
@@ -92,25 +76,12 @@ export const modelsApi = createApi({
         method: 'PATCH',
         body: { slug, ...body },
       }),
-      invalidatesTags: (_result, _error, { slug, newSlug }) => {
-        const tags = [
-          { type: 'Models' as const, id: slug },
-          { type: 'Models' as const, id: 'LIST' },
-        ]
-
-        if (newSlug && newSlug !== slug) {
-          tags.push({ type: 'Models' as const, id: newSlug })
-        }
-
-        return tags
-      },
     }),
   }),
 })
 
 export const {
   useFetchModelsQuery,
-  useLazyFetchModelsQuery,
   useDeleteModelMutation,
   useCreateModelMutation,
   useUpdateModelMutation,

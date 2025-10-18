@@ -1,4 +1,4 @@
-import ModelsPageClient from '@/modules/Cars/Models/ModelsPageClient'
+import ModelsPageClient from '@/modules/Cars/Models'
 
 const DashboardCarModelsPage = () => {
   return <ModelsPageClient />

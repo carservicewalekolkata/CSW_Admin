@@ -24,3 +24,13 @@ export type ServiceCategoryResponse = {
   timestamp: string
   data: ServiceCategory[]
 }
+
+export type CreateServiceCategoryRequest = {
+  name: string
+}
+
+export type ServiceCategoryMutationResponse = {
+  success: boolean
+  message?: string
+  data?: ServiceCategory
+}

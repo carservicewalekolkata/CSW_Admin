@@ -1,0 +1,46 @@
+import type { FormEvent } from 'react'
+
+import type { ServiceCategory } from './serviceCategories'
+
+export type FiltersState = {
+  searchTerm: string
+  dateSort: 'asc' | 'desc'
+  pageSize: number
+  safePage: number
+  totalPages: number
+  total: number
+  startIndex: number
+  endIndex: number
+  onSearchChange: (value: string) => void
+  onSortChange: (value: 'asc' | 'desc') => void
+  onPageSizeChange: (value: number) => void
+  onPrevPage: () => void
+  onNextPage: () => void
+}
+
+export type CreateModalState = {
+  isOpen: boolean
+  name: string
+  error: string | null
+  isSubmitting: boolean
+  open: () => void
+  close: () => void
+  onNameChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
+}
+
+export type DeleteModalState = {
+  target: ServiceCategory | null
+  request: (category: ServiceCategory) => void
+  cancel: () => void
+  confirm: () => Promise<void>
+}
+
+export type UseServiceCategoriesPageResult = {
+  items: ServiceCategory[]
+  isTableLoading: boolean
+  bannerError: string | null
+  filters: FiltersState
+  createModal: CreateModalState
+  deleteModal: DeleteModalState
+}

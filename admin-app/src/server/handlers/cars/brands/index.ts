@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { GridFSBucket } from 'mongodb'
 import { Types } from 'mongoose'
-import { revalidateTag, unstable_cache } from 'next/cache'
 
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
@@ -83,66 +82,59 @@ const normalizeIconId = (icon: unknown): string | null => {
   return null
 }
 
-const buildCacheKey = ({ search, slug, sortStatus, sortUpdated, page, limit }: QueryParams) =>
-  JSON.stringify({ search, slug, sortStatus, sortUpdated, page, limit })
+const fetchBrandsFromDatabase = async (params: QueryParams) => {
+  const mongooseInstance = await connectToDatabase()
+  const connection = mongooseInstance.connection
 
-const getBrandsCached = unstable_cache(
-  async (params: QueryParams) => {
-    const mongooseInstance = await connectToDatabase()
-    const connection = mongooseInstance.connection
+  if (!connection?.db) {
+    throw new Error('No active MongoDB connection')
+  }
 
-    if (!connection?.db) {
-      throw new Error('No active MongoDB connection')
-    }
+  const Brand = getBrandModel(connection)
 
-    const Brand = getBrandModel(connection)
+  const { search, slug, sortStatus = 'none', sortUpdated = 'desc', page = 1, limit = 10 } = params
 
-    const { search, slug, sortStatus = 'none', sortUpdated = 'desc', page = 1, limit = 10 } = params
+  const normalizedSearch = search?.trim().toLowerCase()
+  const normalizedSlug = slug?.trim().toLowerCase()
 
-    const normalizedSearch = search?.trim().toLowerCase()
-    const normalizedSlug = slug?.trim().toLowerCase()
+  const filters: Record<string, unknown> = {}
 
-    const filters: Record<string, unknown> = {}
+  if (normalizedSearch) {
+    filters.name = { $regex: normalizedSearch, $options: 'i' }
+  }
 
-    if (normalizedSearch) {
-      filters.name = { $regex: normalizedSearch, $options: 'i' }
-    }
+  if (normalizedSlug) {
+    filters.slug = { $regex: normalizedSlug, $options: 'i' }
+  }
 
-    if (normalizedSlug) {
-      filters.slug = { $regex: normalizedSlug, $options: 'i' }
-    }
+  const sort: Record<string, 1 | -1> = {}
 
-    const sort: Record<string, 1 | -1> = {}
+  if (sortStatus === 'active-first') {
+    sort.status = -1
+  } else if (sortStatus === 'inactive-first') {
+    sort.status = 1
+  }
 
-    if (sortStatus === 'active-first') {
-      sort.status = -1
-    } else if (sortStatus === 'inactive-first') {
-      sort.status = 1
-    }
+  sort.updated_date = sortUpdated === 'asc' ? 1 : -1
+  sort.created_date = sortUpdated === 'asc' ? 1 : -1
 
-    sort.updated_date = sortUpdated === 'asc' ? 1 : -1
-    sort.created_date = sortUpdated === 'asc' ? 1 : -1
+  const skip = (page - 1) * limit
 
-    const skip = (page - 1) * limit
+  const [results, total] = await Promise.all([
+    Brand.find(filters)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .select(['id', 'name', 'slug', 'status', 'icon', 'created_date', 'updated_date'])
+      .lean<RawBrand[]>(),
+    Brand.countDocuments(filters),
+  ])
 
-    const [results, total] = await Promise.all([
-      Brand.find(filters)
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .select(['id', 'name', 'slug', 'status', 'icon', 'created_date', 'updated_date'])
-        .lean<RawBrand[]>(),
-      Brand.countDocuments(filters),
-    ])
-
-    return {
-      results,
-      total,
-    }
-  },
-  ['brands-query-cache'],
-  { revalidate: 60, tags: ['brands'] },
-)
+  return {
+    results,
+    total,
+  }
+}
 
 export async function GET(request: Request) {
   try {
@@ -158,8 +150,7 @@ export async function GET(request: Request) {
       limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
     }
 
-    const cacheKey = buildCacheKey(query)
-    const { results, total } = await getBrandsCached(query)
+    const { results, total } = await fetchBrandsFromDatabase(query)
 
     const normalizedData = results.map((brand) => {
       const iconId = normalizeIconId(brand.icon)
@@ -183,13 +174,12 @@ export async function GET(request: Request) {
           total,
           page: query.page,
           limit: query.limit,
-          cacheKey,
           timestamp: new Date().toISOString(),
           data: normalizedData,
         },
         {
           headers: {
-            'Cache-Control': 'public, max-age=60',
+            'Cache-Control': 'no-store',
           },
         },
       ),
@@ -309,8 +299,6 @@ export async function POST(request: Request) {
       updated_date: now,
     })
 
-    revalidateTag('brands')
-
     const created = createdDoc.toObject() as RawBrand & { icon?: unknown }
     const iconId = normalizeIconId(created.icon)
 
@@ -352,7 +340,7 @@ export async function PATCH(request: Request) {
     const payload = await request.json().catch(() => null)
 
     const targetSlug =
-      typeof payload?.slug === 'string' ? payload.slug.trim().toLowerCase() : undefined
+      typeof payload?.slug === 'string' ? payload.slug.trim() : undefined
 
     if (!targetSlug) {
       return versionedJson(
@@ -500,8 +488,6 @@ export async function PATCH(request: Request) {
       )
     }
 
-    revalidateTag('brands')
-
     const updated = updatedDoc.toObject() as RawBrand & { icon?: unknown }
     const iconId = normalizeIconId(updated.icon)
 
@@ -552,7 +538,7 @@ export async function DELETE(request: Request) {
     }
 
     const payload = await request.json().catch(() => null)
-    const slug = typeof payload?.slug === 'string' ? payload.slug.trim().toLowerCase() : undefined
+    const slug = typeof payload?.slug === 'string' ? payload.slug.trim() : undefined
 
     if (!slug) {
       return versionedJson(
@@ -570,8 +556,6 @@ export async function DELETE(request: Request) {
         { status: 404 },
       )
     }
-
-    revalidateTag('brands')
 
     return versionedJson(
       {

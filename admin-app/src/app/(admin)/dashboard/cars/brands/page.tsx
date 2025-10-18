@@ -1,4 +1,4 @@
-import BrandsPageClient from '@/modules/Cars/Brands/BrandsPageClient'
+import BrandsPageClient from '@/modules/Cars/Brands'
 
 const DashboardCarsBrandsPage = () => {
   return <BrandsPageClient />

@@ -1,5 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import type { Model, ModelQuery, ModelResponse } from '@/types/models'
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
+
+import type { Model } from '@/types/models'
+import { resolveModelErrorMessage } from '@/utils/models'
 import { modelsApi } from './modelsApi'
 
 export type ModelsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
@@ -11,7 +13,6 @@ export interface ModelsState {
   total: number
   page: number
   limit: number
-  lastQuery: ModelQuery
 }
 
 const initialState: ModelsState = {
@@ -21,23 +22,59 @@ const initialState: ModelsState = {
   total: 0,
   page: 1,
   limit: 10,
-  lastQuery: {
-    page: 1,
-    limit: 10,
-    sortStatus: 'none',
-    sortUpdated: 'desc',
-  },
 }
+
+const findModelIndex = (items: Model[], slug: string) => items.findIndex((item) => item.slug === slug)
 
 const modelsSlice = createSlice({
   name: 'models',
   initialState,
   reducers: {
-    clearModels(state) {
-      Object.assign(state, initialState)
+    addModel(state, action: PayloadAction<Model>) {
+      const model = action.payload
+      const existingIndex = findModelIndex(state.items, model.slug)
+
+      if (existingIndex !== -1) {
+        state.items[existingIndex] = model
+      } else {
+        state.items.unshift(model)
+        state.total += 1
+      }
     },
-    setLastQuery(state, action: PayloadAction<Partial<ModelQuery>>) {
-      state.lastQuery = { ...state.lastQuery, ...action.payload }
+    updateModel(state, action: PayloadAction<{ model: Model; previousSlug?: string }>) {
+      const { model, previousSlug } = action.payload
+      const slugToMatch = previousSlug ?? model.slug
+      let targetIndex = findModelIndex(state.items, slugToMatch)
+
+      if (targetIndex === -1) {
+        targetIndex = findModelIndex(state.items, model.slug)
+      }
+
+      if (targetIndex !== -1) {
+        state.items[targetIndex] = model
+      } else {
+        state.items.unshift(model)
+        state.total += 1
+        targetIndex = 0
+      }
+
+      if (previousSlug && previousSlug !== model.slug) {
+        for (let index = state.items.length - 1; index >= 0; index -= 1) {
+          if (index !== targetIndex && state.items[index]?.slug === model.slug) {
+            state.items.splice(index, 1)
+            state.total = Math.max(0, state.total - 1)
+          }
+        }
+      }
+    },
+    removeModel(state, action: PayloadAction<string>) {
+      const slug = action.payload
+      const index = findModelIndex(state.items, slug)
+
+      if (index !== -1) {
+        state.items.splice(index, 1)
+        state.total = Math.max(0, state.total - 1)
+      }
     },
   },
   extraReducers: (builder) => {
@@ -46,58 +83,28 @@ const modelsSlice = createSlice({
         state.status = 'loading'
         state.error = null
       })
-      .addMatcher(modelsApi.endpoints.fetchModels.matchFulfilled, (state, { payload, meta }) => {
-        const query = meta?.arg?.originalArgs as ModelQuery | undefined
-        const response = payload as ModelResponse
-
+      .addMatcher(modelsApi.endpoints.fetchModels.matchFulfilled, (state, action) => {
+        const response = action.payload
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = response.total ?? 0
-        state.page = response.page ?? 1
-        state.limit = response.limit ?? 10
+        state.total = typeof response.total === 'number' ? response.total : response.count ?? 0
+        state.page = typeof response.page === 'number' ? response.page : 1
+        state.limit = typeof response.limit === 'number' ? response.limit : state.limit
         state.status = 'succeeded'
         state.error = null
-
-        state.lastQuery = {
-          page: state.page,
-          limit: state.limit,
-          sortStatus: query?.sortStatus ?? 'none',
-          sortUpdated: query?.sortUpdated ?? 'desc',
-          search: query?.search,
-          slug: query?.slug,
-          brand: query?.brand,
-          bodyType: query?.bodyType,
-          fuel: query?.fuel,
-        }
       })
-      .addMatcher(modelsApi.endpoints.fetchModels.matchRejected, (state, { error }) => {
+      .addMatcher(modelsApi.endpoints.fetchModels.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to fetch models'
-      })
-      .addMatcher(modelsApi.endpoints.deleteModel.matchPending, (state) => {
-        state.error = null
-      })
-      .addMatcher(modelsApi.endpoints.deleteModel.matchFulfilled, (state, { meta }) => {
-        const slug = meta?.arg?.originalArgs as string
-        if (slug) {
-          state.items = state.items.filter((m) => m.slug !== slug)
-          state.total = Math.max(0, state.total - 1)
-        }
-        state.status = 'succeeded'
-      })
-      .addMatcher(modelsApi.endpoints.deleteModel.matchRejected, (state, { error }) => {
-        state.status = 'failed'
-        state.error = error?.message ?? 'Failed to delete model'
+        state.error = resolveModelErrorMessage(action.payload ?? action.error, 'Failed to fetch models')
       })
   },
 })
 
+export const { addModel, updateModel, removeModel } = modelsSlice.actions
+
 export const {
   useFetchModelsQuery,
-  useLazyFetchModelsQuery,
   useDeleteModelMutation,
   useCreateModelMutation,
   useUpdateModelMutation,
 } = modelsApi
-export const usePrefetchModels = () => modelsApi.usePrefetch('fetchModels')
-export const { clearModels, setLastQuery } = modelsSlice.actions
 export default modelsSlice.reducer

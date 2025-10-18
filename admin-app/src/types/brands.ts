@@ -17,6 +17,7 @@ export type BrandQuery = {
   sortUpdated?: BrandSortUpdated
   page?: number
   limit?: number
+  cacheBust?: number
 }
 
 export type BrandResponse = {

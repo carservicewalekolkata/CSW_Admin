@@ -1,5 +1,7 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import type { Brand, BrandQuery, BrandResponse } from '@/types/brands'
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
+
+import type { Brand } from '@/types/brands'
+import { resolveBrandErrorMessage } from '@/utils/brands'
 import { brandsApi } from './brandsApi'
 
 export type BrandsStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
@@ -11,7 +13,6 @@ export interface BrandsState {
   total: number
   page: number
   limit: number
-  lastQuery: BrandQuery
 }
 
 const initialState: BrandsState = {
@@ -21,23 +22,59 @@ const initialState: BrandsState = {
   total: 0,
   page: 1,
   limit: 10,
-  lastQuery: {
-    page: 1,
-    limit: 10,
-    sortStatus: 'none',
-    sortUpdated: 'desc',
-  },
 }
+
+const findBrandIndex = (items: Brand[], slug: string) => items.findIndex((item) => item.slug === slug)
 
 const brandsSlice = createSlice({
   name: 'brands',
   initialState,
   reducers: {
-    clearBrands(state) {
-      Object.assign(state, initialState)
+    addBrand(state, action: PayloadAction<Brand>) {
+      const brand = action.payload
+      const existingIndex = findBrandIndex(state.items, brand.slug)
+
+      if (existingIndex !== -1) {
+        state.items[existingIndex] = brand
+      } else {
+        state.items.unshift(brand)
+        state.total += 1
+      }
     },
-    setLastQuery(state, action: PayloadAction<Partial<BrandQuery>>) {
-      state.lastQuery = { ...state.lastQuery, ...action.payload }
+    updateBrand(state, action: PayloadAction<{ brand: Brand; previousSlug?: string }>) {
+      const { brand, previousSlug } = action.payload
+      const slugToMatch = previousSlug ?? brand.slug
+      let targetIndex = findBrandIndex(state.items, slugToMatch)
+
+      if (targetIndex === -1) {
+        targetIndex = findBrandIndex(state.items, brand.slug)
+      }
+
+      if (targetIndex !== -1) {
+        state.items[targetIndex] = brand
+      } else {
+        state.items.unshift(brand)
+        state.total += 1
+        targetIndex = 0
+      }
+
+      if (previousSlug && previousSlug !== brand.slug) {
+        for (let index = state.items.length - 1; index >= 0; index -= 1) {
+          if (index !== targetIndex && state.items[index]?.slug === brand.slug) {
+            state.items.splice(index, 1)
+            state.total = Math.max(0, state.total - 1)
+          }
+        }
+      }
+    },
+    removeBrand(state, action: PayloadAction<string>) {
+      const slug = action.payload
+      const index = findBrandIndex(state.items, slug)
+
+      if (index !== -1) {
+        state.items.splice(index, 1)
+        state.total = Math.max(0, state.total - 1)
+      }
     },
   },
   extraReducers: (builder) => {
@@ -46,55 +83,30 @@ const brandsSlice = createSlice({
         state.status = 'loading'
         state.error = null
       })
-      .addMatcher(brandsApi.endpoints.fetchBrands.matchFulfilled, (state, { payload, meta }) => {
-        const query = meta?.arg?.originalArgs as BrandQuery | undefined
-        const response = payload as BrandResponse
-
+      .addMatcher(brandsApi.endpoints.fetchBrands.matchFulfilled, (state, action) => {
+        const response = action.payload
         state.items = Array.isArray(response.data) ? response.data : []
-        state.total = response.total ?? 0
-        state.page = response.page ?? 1
-        state.limit = response.limit ?? 10
+        state.total = typeof response.total === 'number' ? response.total : response.count ?? 0
+        state.page = typeof response.page === 'number' ? response.page : 1
+        state.limit = typeof response.limit === 'number' ? response.limit : state.limit
         state.status = 'succeeded'
         state.error = null
-
-        state.lastQuery = {
-          page: state.page,
-          limit: state.limit,
-          sortStatus: query?.sortStatus ?? 'none',
-          sortUpdated: query?.sortUpdated ?? 'desc',
-          search: query?.search,
-          slug: query?.slug,
-        }
       })
-      .addMatcher(brandsApi.endpoints.fetchBrands.matchRejected, (state, { error }) => {
+      .addMatcher(brandsApi.endpoints.fetchBrands.matchRejected, (state, action) => {
         state.status = 'failed'
-        state.error = error?.message ?? 'Failed to fetch brands'
-      })
-      .addMatcher(brandsApi.endpoints.deleteBrand.matchPending, (state) => {
-        state.error = null
-      })
-      .addMatcher(brandsApi.endpoints.deleteBrand.matchFulfilled, (state, { meta }) => {
-        const slug = meta?.arg?.originalArgs as string
-        if (slug) {
-          state.items = state.items.filter((b) => b.slug !== slug)
-          state.total = Math.max(0, state.total - 1)
-        }
-        state.status = 'succeeded'
-      })
-      .addMatcher(brandsApi.endpoints.deleteBrand.matchRejected, (state, { error }) => {
-        state.status = 'failed'
-        state.error = error?.message ?? 'Failed to delete brand'
+        state.error = resolveBrandErrorMessage(action.payload ?? action.error, 'Failed to fetch brands')
       })
   },
 })
 
+export const { addBrand, updateBrand, removeBrand } = brandsSlice.actions
+
 export const {
   useFetchBrandsQuery,
-  useLazyFetchBrandsQuery,
-  useDeleteBrandMutation,
   useCreateBrandMutation,
   useUpdateBrandMutation,
+  useDeleteBrandMutation,
 } = brandsApi
 export const usePrefetchBrands = () => brandsApi.usePrefetch('fetchBrands')
-export const { clearBrands, setLastQuery } = brandsSlice.actions
+
 export default brandsSlice.reducer

@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { GridFSBucket } from 'mongodb'
-import { revalidateTag, unstable_cache } from 'next/cache'
 import { Types } from 'mongoose'
 
 import { versionedJson } from '@/server/apiVersion'
@@ -137,19 +136,6 @@ const normalizeImagePath = (value?: string | null): string | null => {
   return `/${value.replace(/^\/+/, '')}`
 }
 
-const buildCacheKey = ({
-  search,
-  slug,
-  brand,
-  bodyType,
-  fuel,
-  sortStatus,
-  sortUpdated,
-  page,
-  limit,
-}: QueryParams) =>
-  JSON.stringify({ search, slug, brand, bodyType, fuel, sortStatus, sortUpdated, page, limit })
-
 const toServiceIdString = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim().length > 0) {
     return value
@@ -166,93 +152,89 @@ const toServiceIdString = (value: unknown): string | null => {
   return null
 }
 
-const getModelsCached = unstable_cache(
-  async (params: QueryParams) => {
-    const mongooseInstance = await connectToDatabase()
-    const connection = mongooseInstance.connection
+const fetchModelsFromDatabase = async (params: QueryParams) => {
+  const mongooseInstance = await connectToDatabase()
+  const connection = mongooseInstance.connection
 
-    if (!connection?.db) {
-      throw new Error('No active MongoDB connection')
-    }
+  if (!connection?.db) {
+    throw new Error('No active MongoDB connection')
+  }
 
-    const Model = getModelModel(connection)
+  const Model = getModelModel(connection)
 
-    const {
-      search,
-      slug,
-      brand,
-      bodyType,
-      fuel,
-      sortStatus = 'none',
-      sortUpdated = 'desc',
-      page = 1,
-      limit = 10,
-    } = params
+  const {
+    search,
+    slug,
+    brand,
+    bodyType,
+    fuel,
+    sortStatus = 'none',
+    sortUpdated = 'desc',
+    page = 1,
+    limit = 10,
+  } = params
 
-    const filters: Record<string, unknown> = {}
+  const filters: Record<string, unknown> = {}
 
-    if (search?.trim()) {
-      filters.name = { $regex: search.trim(), $options: 'i' }
-    }
+  if (search?.trim()) {
+    filters.name = { $regex: search.trim(), $options: 'i' }
+  }
 
-    if (slug?.trim()) {
-      filters.slug = { $regex: slug.trim(), $options: 'i' }
-    }
+  if (slug?.trim()) {
+    filters.slug = { $regex: slug.trim(), $options: 'i' }
+  }
 
-    if (brand?.trim()) {
-      filters.brand_name = { $regex: brand.trim(), $options: 'i' }
-    }
+  if (brand?.trim()) {
+    filters.brand_name = { $regex: brand.trim(), $options: 'i' }
+  }
 
-    if (bodyType?.trim()) {
-      filters.body_type = { $regex: bodyType.trim(), $options: 'i' }
-    }
+  if (bodyType?.trim()) {
+    filters.body_type = { $regex: bodyType.trim(), $options: 'i' }
+  }
 
-    if (fuel?.trim()) {
-      filters.fuel_type = { $regex: fuel.trim(), $options: 'i' }
-    }
+  if (fuel?.trim()) {
+    filters.fuel_type = { $regex: fuel.trim(), $options: 'i' }
+  }
 
-    const sort: Record<string, 1 | -1> = {}
+  const sort: Record<string, 1 | -1> = {}
 
-    if (sortStatus === 'active-first') {
-      sort.status = -1
-    } else if (sortStatus === 'inactive-first') {
-      sort.status = 1
-    }
+  if (sortStatus === 'active-first') {
+    sort.status = -1
+  } else if (sortStatus === 'inactive-first') {
+    sort.status = 1
+  }
 
-    sort.updated_date = sortUpdated === 'asc' ? 1 : -1
-    sort.created_date = sortUpdated === 'asc' ? 1 : -1
+  sort.updated_date = sortUpdated === 'asc' ? 1 : -1
+  sort.created_date = sortUpdated === 'asc' ? 1 : -1
 
-    const skip = (page - 1) * limit
+  const skip = (page - 1) * limit
 
-    const [results, total] = await Promise.all([
-      Model.find(filters)
-        .sort(sort)
-        .skip(skip)
-        .limit(limit)
-        .select([
-          'id',
-          'name',
-          'slug',
-          'brand_id',
-          'brand_name',
-          'body_type',
-          'fuel_type',
-          'thumbnail',
-          'image',
-          'services',
-          'status',
-          'created_date',
-          'updated_date',
-        ])
-        .lean<RawModel[]>(),
-      Model.countDocuments(filters),
-    ])
+  const [results, total] = await Promise.all([
+    Model.find(filters)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .select([
+        'id',
+        'name',
+        'slug',
+        'brand_id',
+        'brand_name',
+        'body_type',
+        'fuel_type',
+        'thumbnail',
+        'image',
+        'services',
+        'status',
+        'created_date',
+        'updated_date',
+      ])
+      .lean<RawModel[]>(),
+    Model.countDocuments(filters),
+  ])
 
-    return { results, total }
-  },
-  ['models-query-cache'],
-  { revalidate: 60, tags: ['models'] },
-)
+  return { results, total }
+}
 
 export async function GET(request: Request) {
   try {
@@ -271,8 +253,7 @@ export async function GET(request: Request) {
       limit: parseNumber(searchParams.get('limit'), 10, 1, 100),
     }
 
-    const cacheKey = buildCacheKey(query)
-    const { results, total } = await getModelsCached(query)
+    const { results, total } = await fetchModelsFromDatabase(query)
 
     const serviceIdSet = new Set<string>()
     results.forEach((model) => {
@@ -371,13 +352,12 @@ export async function GET(request: Request) {
           total,
           page: query.page,
           limit: query.limit,
-          cacheKey,
           timestamp: new Date().toISOString(),
           data,
         },
         {
           headers: {
-            'Cache-Control': 'public, max-age=60',
+            'Cache-Control': 'no-store',
           },
         },
       ),
@@ -599,8 +579,6 @@ export async function POST(request: Request) {
       created_date: now,
       updated_date: now,
     })
-
-    revalidateTag('models')
 
     const created = createdDoc.toObject() as RawModel & { thumbnail?: unknown }
     const thumbnailId = normalizeIconId(created.thumbnail)
@@ -927,11 +905,6 @@ export async function PATCH(request: Request) {
       )
     }
 
-    revalidateTag('models')
-    if (brandChanged) {
-      revalidateTag('brands')
-    }
-
     const updated = updatedDoc.toObject() as RawModel & { thumbnail?: unknown }
     const thumbnailId = normalizeIconId(updated.thumbnail)
 
@@ -1019,8 +992,6 @@ export async function DELETE(request: Request) {
         { status: 404 },
       )
     }
-
-    revalidateTag('models')
 
     return versionedJson(
       {
