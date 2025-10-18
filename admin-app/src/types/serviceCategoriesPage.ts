@@ -29,6 +29,18 @@ export type CreateModalState = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
 }
 
+export type EditModalState = {
+  isOpen: boolean
+  target: ServiceCategory | null
+  name: string
+  error: string | null
+  isSubmitting: boolean
+  open: (category: ServiceCategory) => void
+  close: () => void
+  onNameChange: (value: string) => void
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
+}
+
 export type DeleteModalState = {
   target: ServiceCategory | null
   request: (category: ServiceCategory) => void
@@ -42,5 +54,6 @@ export type UseServiceCategoriesPageResult = {
   bannerError: string | null
   filters: FiltersState
   createModal: CreateModalState
+  editModal: EditModalState
   deleteModal: DeleteModalState
 }

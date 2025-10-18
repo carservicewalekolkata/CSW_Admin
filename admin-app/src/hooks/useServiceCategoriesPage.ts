@@ -8,13 +8,16 @@ import {
   useCreateServiceCategoryMutation,
   useLazyFetchServiceCategoriesQuery,
   addServiceCategory,
+  updateServiceCategory as updateServiceCategoryAction,
   removeServiceCategory,
+  useUpdateServiceCategoryMutation,
 } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
 import type { ServiceCategory, ServiceCategoryQuery } from '@/types/serviceCategories'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { resolveServiceCategoryErrorMessage } from '@/utils/serviceCategories'
 import type {
   CreateModalState,
+  EditModalState,
   DeleteModalState,
   FiltersState,
   UseServiceCategoriesPageResult,
@@ -39,12 +42,16 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+  const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
 
   const dispatch = useAppDispatch()
 
   const { error, isLoading, isFetching } = useFetchServiceCategoriesQuery(query)
   const [deleteServiceCategory] = useDeleteServiceCategoryMutation()
   const [createServiceCategory, { isLoading: isCreating }] = useCreateServiceCategoryMutation()
+  const [updateServiceCategory, { isLoading: isUpdating }] = useUpdateServiceCategoryMutation()
   const [fetchServiceCategoriesLazy, { isFetching: isLazyFetching }] = useLazyFetchServiceCategoriesQuery()
   const prefetchServiceCategories = usePrefetchServiceCategories()
   const { items, total, status: categoriesStatus } = useAppSelector((state) => state.serviceCategories)
@@ -190,12 +197,78 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
     confirm: handleDeleteConfirm,
   }
 
+  const openEditModal = (category: ServiceCategory) => {
+    setEditingCategory(category)
+    setEditName(category.name)
+    setEditError(null)
+  }
+
+  const closeEditModal = () => {
+    setEditingCategory(null)
+    setEditName('')
+    setEditError(null)
+  }
+
+  const handleEditSubmit: EditModalState['onSubmit'] = async (event) => {
+    event.preventDefault()
+    if (!editingCategory || isUpdating) return
+
+    const trimmed = editName.trim()
+    if (!trimmed) {
+      setEditError('Category name is required')
+      return
+    }
+
+    if (trimmed === editingCategory.name) {
+      toast.info('No changes to save')
+      return
+    }
+
+    try {
+      setEditError(null)
+      const response = await updateServiceCategory({ id: editingCategory.id, name: trimmed }).unwrap()
+      const updatedCategory =
+        response.data ?? {
+          ...editingCategory,
+          name: trimmed,
+          updated_date: new Date().toISOString(),
+        }
+
+      dispatch(updateServiceCategoryAction(updatedCategory))
+      toast.success(`Updated category: ${updatedCategory.name}`)
+      closeEditModal()
+      await refreshWithLatestQuery(page)
+    } catch (err) {
+      const message = resolveServiceCategoryErrorMessage(err, 'Failed to update service category')
+      setEditError(message)
+      toast.error(message)
+    }
+  }
+
+  const editModal: EditModalState = {
+    isOpen: Boolean(editingCategory),
+    target: editingCategory,
+    name: editName,
+    error: editError,
+    isSubmitting: isUpdating,
+    open: openEditModal,
+    close: closeEditModal,
+    onNameChange: (value: string) => {
+      setEditName(value)
+      if (editError) {
+        setEditError(null)
+      }
+    },
+    onSubmit: handleEditSubmit,
+  }
+
   return {
     items,
     isTableLoading,
     bannerError,
     filters,
     createModal,
+    editModal,
     deleteModal,
   }
 }

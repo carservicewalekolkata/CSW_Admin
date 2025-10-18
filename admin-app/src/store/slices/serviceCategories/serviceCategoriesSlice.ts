@@ -93,6 +93,7 @@ export const {
   useLazyFetchServiceCategoriesQuery,
   useDeleteServiceCategoryMutation,
   useCreateServiceCategoryMutation,
+  useUpdateServiceCategoryMutation,
 } = serviceCategoriesApi
 
 export const usePrefetchServiceCategories = () =>

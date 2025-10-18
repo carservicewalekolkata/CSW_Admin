@@ -1,16 +1,16 @@
 'use client'
 
 import { FiPlus } from 'react-icons/fi'
-import { toast } from '@/lib/sonner'
 
 import useServiceCategoriesPage from '@/hooks/useServiceCategoriesPage'
 import ServiceCategoriesFilters from './ServiceCategoriesFilters'
 import ServiceCategoriesTable from './ServiceCategoriesTable'
 import CreateServiceCategoryModal from './CreateServiceCategoryModal'
+import EditServiceCategoryModal from './EditServiceCategoryModal'
 import DeleteServiceCategoryModal from './DeleteServiceCategoryModal'
 
 const ServiceCategoriesPageClient = () => {
-  const { items, isTableLoading, bannerError, filters, createModal, deleteModal } =
+  const { items, isTableLoading, bannerError, filters, createModal, editModal, deleteModal } =
     useServiceCategoriesPage()
 
   return (
@@ -41,11 +41,12 @@ const ServiceCategoriesPageClient = () => {
       <ServiceCategoriesTable
         items={items}
         isLoading={isTableLoading}
-        onEdit={(category) => toast.info(`Edit modal for ${category.name} coming soon.`)}
+        onEdit={editModal.open}
         onDelete={deleteModal.request}
       />
 
       <CreateServiceCategoryModal modal={createModal} />
+      <EditServiceCategoryModal modal={editModal} />
       <DeleteServiceCategoryModal modal={deleteModal} />
     </section>
   )

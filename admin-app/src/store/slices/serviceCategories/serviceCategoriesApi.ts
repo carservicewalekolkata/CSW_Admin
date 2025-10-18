@@ -6,6 +6,7 @@ import type {
   ServiceCategoryMutationResponse,
   ServiceCategoryQuery,
   ServiceCategoryResponse,
+  UpdateServiceCategoryRequest,
 } from '@/types/serviceCategories'
 
 const serviceCategoriesPath = APIEndpoint.services.servicesCategory
@@ -51,6 +52,17 @@ export const serviceCategoriesApi = createApi({
         body,
       }),
     }),
+
+    updateServiceCategory: builder.mutation<
+      ServiceCategoryMutationResponse,
+      UpdateServiceCategoryRequest
+    >({
+      query: (body) => ({
+        url: serviceCategoriesPath,
+        method: 'PATCH',
+        body,
+      }),
+    }),
   }),
 })
 
@@ -59,4 +71,5 @@ export const {
   useLazyFetchServiceCategoriesQuery,
   useDeleteServiceCategoryMutation,
   useCreateServiceCategoryMutation,
+  useUpdateServiceCategoryMutation,
 } = serviceCategoriesApi

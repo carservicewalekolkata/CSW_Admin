@@ -29,6 +29,11 @@ export type CreateServiceCategoryRequest = {
   name: string
 }
 
+export type UpdateServiceCategoryRequest = {
+  id: number
+  name: string
+}
+
 export type ServiceCategoryMutationResponse = {
   success: boolean
   message?: string
