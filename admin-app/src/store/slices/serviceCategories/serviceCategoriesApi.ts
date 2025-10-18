@@ -68,7 +68,6 @@ export const serviceCategoriesApi = createApi({
 
 export const {
   useFetchServiceCategoriesQuery,
-  useLazyFetchServiceCategoriesQuery,
   useDeleteServiceCategoryMutation,
   useCreateServiceCategoryMutation,
   useUpdateServiceCategoryMutation,
