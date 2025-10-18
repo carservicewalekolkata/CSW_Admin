@@ -107,7 +107,7 @@ export const GET = async (request: Request) => {
         },
         {
           headers: {
-            'Cache-Control': 'public, max-age=60',
+            'Cache-Control': 'no-store',
           },
         },
       ),
