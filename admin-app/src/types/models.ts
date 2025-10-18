@@ -21,6 +21,7 @@ export interface Model {
   fuel_type: string[]
   thumbnail: string | null
   image: string | null
+  image_path: string | null
   services: ModelService[]
   status: boolean
   created_date: string | null

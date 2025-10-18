@@ -13,6 +13,7 @@ import useModelFormSubmission from '@/hooks/useModelFormSubmission'
 type UseModelFormParams = {
   brandOptions: { slug: string; name: string }[]
   categoryOptions: ServiceCategory[]
+  refetchBrands: () => Promise<unknown>
   page: number
   setPage: (value: number) => void
 }
@@ -27,6 +28,7 @@ const findBrandSlug = (model: Model, brandOptions: { slug: string; name: string 
 export const useModelForm = ({
   brandOptions,
   categoryOptions,
+  refetchBrands,
   page,
   setPage,
 }: UseModelFormParams): ModelFormModalState => {
@@ -44,9 +46,10 @@ export const useModelForm = ({
   }, [servicePicker])
 
   const openCreate = useCallback(() => {
+    void refetchBrands()
     formState.openCreate(defaultBrandSlug)
     resetPicker()
-  }, [defaultBrandSlug, formState, resetPicker])
+  }, [defaultBrandSlug, formState, refetchBrands, resetPicker])
 
   const openEdit = useCallback(
     (model: Model) => {
@@ -113,7 +116,21 @@ export const useModelForm = ({
   const onImagePathChange = (value: string) => {
     const trimmed = value.trim()
     formState.updateField('imagePath', trimmed)
-    formState.setImagePreviewUrl(trimmed ? `/${trimmed.replace(/^\/+/, '')}` : null)
+    if (!trimmed) {
+      formState.setImagePreviewUrl(null)
+    } else if (trimmed.startsWith('azure:')) {
+      const blobName = trimmed.slice('azure:'.length)
+      if (blobName) {
+        const encoded = blobName.split('/').map(encodeURIComponent).join('/')
+        formState.setImagePreviewUrl(`/api/v1/cars/models/image/blob/${encoded}`)
+      } else {
+        formState.setImagePreviewUrl(null)
+      }
+    } else if (/^https?:\/\//i.test(trimmed)) {
+      formState.setImagePreviewUrl(trimmed)
+    } else {
+      formState.setImagePreviewUrl(`/${trimmed.replace(/^\/+/, '')}`)
+    }
   }
 
   const onServiceCategoryChange = async (categoryId: string) => {

@@ -10,7 +10,7 @@ type ServiceDetailsFormModalProps = {
 }
 
 const textFields: Array<{
-  key: keyof ServiceFormModalState['values']
+  key: 'name' | 'timeTaken' | 'warranty'
   label: string
   placeholder: string
 }> = [
@@ -20,7 +20,7 @@ const textFields: Array<{
 ]
 
 const textareaFields: Array<{
-  key: keyof ServiceFormModalState['values']
+  key: 'description' | 'featuresText'
   label: string
   placeholder: string
 }> = [

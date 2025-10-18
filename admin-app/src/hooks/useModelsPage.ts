@@ -12,6 +12,7 @@ export const useModelsPage = (): UseModelsPageResult => {
   const formModal = useModelForm({
     brandOptions: dataHook.brandOptions,
     categoryOptions: dataHook.categoryOptions,
+    refetchBrands: dataHook.refetchBrands,
     page: filtersHook.page,
     setPage: filtersHook.setPage,
   })

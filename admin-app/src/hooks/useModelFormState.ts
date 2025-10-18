@@ -55,7 +55,7 @@ export const useModelFormState = (defaultBrandSlug: string) => {
       slug: model.slug,
       brandSlug,
       status: model.status,
-      imagePath: extractModelImagePath(model.image),
+      imagePath: extractModelImagePath(model.image, model.image_path),
       iconId: extractModelIconId(model.thumbnail),
       services: mapModelServicesToForm(model),
     })

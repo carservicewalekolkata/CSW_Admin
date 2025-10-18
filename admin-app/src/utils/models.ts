@@ -29,9 +29,39 @@ export const extractModelIconId = (icon: string | null) => {
   return segments[segments.length - 1] ?? ''
 }
 
-export const extractModelImagePath = (image: string | null) => {
+const MODEL_IMAGE_PROXY_PREFIX = '/api/v1/cars/models/image/blob/'
+
+export const extractModelImagePath = (image: string | null, raw?: string | null) => {
+  const trimmedRaw = raw?.trim()
+  if (trimmedRaw) {
+    return trimmedRaw
+  }
+
   if (!image) return ''
-  return image.replace(/^\/+/, '')
+
+  const trimmed = image.trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  if (trimmed.startsWith('azure:')) {
+    return trimmed
+  }
+
+  if (trimmed.startsWith(MODEL_IMAGE_PROXY_PREFIX)) {
+    const remainder = trimmed.slice(MODEL_IMAGE_PROXY_PREFIX.length)
+    const decoded = remainder
+      .split('/')
+      .map((segment) => decodeURIComponent(segment))
+      .join('/')
+    return `azure:${decoded}`
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+
+  return trimmed.replace(/^\/+/, '')
 }
 
 export const resolveModelErrorMessage = (error: unknown, fallback: string) => {
@@ -142,7 +172,7 @@ export const buildModelUpdatePayload = (values: ModelFormValues, model: Model) =
     hasChanges = true
   }
 
-  const existingImagePath = extractModelImagePath(model.image)
+  const existingImagePath = extractModelImagePath(model.image, model.image_path)
   if (values.imagePath !== existingImagePath) {
     payload.imagePath = values.imagePath ? values.imagePath : null
     hasChanges = true

@@ -156,8 +156,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
     onSearchChange: handleSearchChange,
     onSortChange: handleSortChange,
     onPageSizeChange: handlePageSizeChange,
-    onPrevPage: () => setPage((prev) => Math.max(1, prev - 1)),
-    onNextPage: () => setPage((prev) => Math.min(totalPages, prev + 1)),
+    onPrevPage: () => setPage(Math.max(1, safePage - 1)),
+    onNextPage: () => setPage(Math.min(totalPages, safePage + 1)),
   }
 
   const createModal: CreateModalState = {

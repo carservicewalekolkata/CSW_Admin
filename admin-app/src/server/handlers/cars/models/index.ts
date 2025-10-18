@@ -8,6 +8,12 @@ import { connectToDatabase } from '@/lib/db'
 import { getBrandModel, getModelModel, getServiceModel } from '@/models'
 import type { ModelService } from '@/types/models'
 import { applyCors, corsPreflight } from '@/server/cors'
+import {
+  AZURE_MODEL_IMAGE_SCHEME,
+  buildModelImageProxyUrl,
+  deleteModelImageIfExists,
+  extractModelImageBlobName,
+} from '@/lib/azureStorage'
 
 type RawModelService = {
   services_id: unknown
@@ -124,16 +130,42 @@ const normalizeIconId = (icon: unknown): string | null => {
   return null
 }
 
-const normalizeImagePath = (value?: string | null): string | null => {
+type ResolvedModelImage = {
+  view: string | null
+  raw: string | null
+}
+
+const resolveModelImage = (value?: string | null): ResolvedModelImage => {
   if (!value) {
-    return null
+    return { view: null, raw: null }
   }
 
-  if (/^https?:\/\//i.test(value)) {
-    return value
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return { view: null, raw: null }
   }
 
-  return `/${value.replace(/^\/+/, '')}`
+  const blobName = extractModelImageBlobName(trimmed)
+  if (blobName) {
+    return {
+      view: buildModelImageProxyUrl(blobName),
+      raw: `${AZURE_MODEL_IMAGE_SCHEME}${blobName}`,
+    }
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return { view: trimmed, raw: trimmed }
+  }
+
+  const normalized = trimmed.replace(/^\/+/, '')
+  if (!normalized) {
+    return { view: null, raw: null }
+  }
+
+  return {
+    view: `/${normalized}`,
+    raw: normalized,
+  }
 }
 
 const toServiceIdString = (value: unknown): string | null => {
@@ -307,6 +339,8 @@ export async function GET(request: Request) {
       const thumbnailId = normalizeIconId(model.thumbnail)
       const services: RawModelService[] = Array.isArray(model.services) ? model.services : []
 
+      const imageInfo = resolveModelImage(model.image)
+
       return {
         id: model.id,
         name: model.name,
@@ -316,7 +350,8 @@ export async function GET(request: Request) {
         body_type: model.body_type ?? null,
         fuel_type: Array.isArray(model.fuel_type) ? model.fuel_type : [],
         thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
-        image: normalizeImagePath(model.image),
+        image: imageInfo.view,
+        image_path: imageInfo.raw,
         services: services
           .map((service) => {
             const serviceId = toServiceIdString(service.services_id)
@@ -582,6 +617,7 @@ export async function POST(request: Request) {
 
     const created = createdDoc.toObject() as RawModel & { thumbnail?: unknown }
     const thumbnailId = normalizeIconId(created.thumbnail)
+    const createdImage = resolveModelImage(created.image)
 
     return versionedJson(
       {
@@ -595,7 +631,8 @@ export async function POST(request: Request) {
           body_type: created.body_type ?? null,
           fuel_type: Array.isArray(created.fuel_type) ? created.fuel_type : [],
           thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
-          image: normalizeImagePath(created.image),
+          image: createdImage.view,
+          image_path: createdImage.raw,
           services: created.services ?? [],
           status: Boolean(created.status),
           created_date: normalizeDate(created.created_date) ?? now.toISOString(),
@@ -740,7 +777,6 @@ export async function PATCH(request: Request) {
       }
     }
 
-    let brandChanged = false
     if (payload && Object.prototype.hasOwnProperty.call(payload, 'brandSlug')) {
       const brandSlug =
         typeof payload.brandSlug === 'string' ? payload.brandSlug.trim().toLowerCase() : ''
@@ -786,7 +822,6 @@ export async function PATCH(request: Request) {
         updates.brand_id = brandId
         updates.brand_name = brandName
         hasChanges = true
-        brandChanged = true
       }
     }
 
@@ -907,6 +942,7 @@ export async function PATCH(request: Request) {
 
     const updated = updatedDoc.toObject() as RawModel & { thumbnail?: unknown }
     const thumbnailId = normalizeIconId(updated.thumbnail)
+    const updatedImage = resolveModelImage(updated.image)
 
     const bucket = connection.db ? new GridFSBucket(connection.db, { bucketName: 'fs' }) : null
     if (iconChanged) {
@@ -921,19 +957,27 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (
-      imageChanged &&
-      typeof existing.image === 'string' &&
-      existing.image.trim().length > 0 &&
-      isManagedModelImagePath(existing.image.replace(/^\/+/, '')) &&
-      updated.image !== existing.image
-    ) {
-      const absolutePath = toAbsoluteImagePath(existing.image)
-      try {
-        await fs.unlink(absolutePath)
-      } catch (deleteError) {
-        if ((deleteError as NodeJS.ErrnoException).code !== 'ENOENT') {
-          console.warn('⚠️ Failed to delete previous model image:', deleteError)
+    if (imageChanged && typeof existing.image === 'string' && existing.image.trim().length > 0) {
+      const previousImage = existing.image.trim()
+      const previousAzureBlob = extractModelImageBlobName(previousImage)
+
+      if (previousAzureBlob && updated.image !== previousImage) {
+        try {
+          await deleteModelImageIfExists(previousAzureBlob)
+        } catch (deleteError) {
+          console.warn('⚠️ Failed to delete previous Azure model image:', deleteError)
+        }
+      } else if (
+        isManagedModelImagePath(previousImage.replace(/^\/+/, '')) &&
+        updated.image !== previousImage
+      ) {
+        const absolutePath = toAbsoluteImagePath(previousImage)
+        try {
+          await fs.unlink(absolutePath)
+        } catch (deleteError) {
+          if ((deleteError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.warn('⚠️ Failed to delete previous model image:', deleteError)
+          }
         }
       }
     }
@@ -949,7 +993,8 @@ export async function PATCH(request: Request) {
         body_type: updated.body_type ?? null,
         fuel_type: Array.isArray(updated.fuel_type) ? updated.fuel_type : [],
         thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
-        image: normalizeImagePath(updated.image),
+        image: updatedImage.view,
+        image_path: updatedImage.raw,
         services: updated.services ?? [],
         status: Boolean(updated.status),
         created_date: normalizeDate(updated.created_date),
@@ -991,6 +1036,28 @@ export async function DELETE(request: Request) {
         { success: false, message: 'Model not found' },
         { status: 404 },
       )
+    }
+
+    const deletedImage =
+      deleted && typeof deleted.image === 'string' ? deleted.image.trim() : null
+    if (deletedImage) {
+      const azureBlobName = extractModelImageBlobName(deletedImage)
+      if (azureBlobName) {
+        try {
+          await deleteModelImageIfExists(azureBlobName)
+        } catch (deleteError) {
+          console.warn('⚠️ Failed to delete Azure model image during removal:', deleteError)
+        }
+      } else if (isManagedModelImagePath(deletedImage.replace(/^\/+/, ''))) {
+        const absolutePath = toAbsoluteImagePath(deletedImage)
+        try {
+          await fs.unlink(absolutePath)
+        } catch (deleteError) {
+          if ((deleteError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.warn('⚠️ Failed to delete model image during removal:', deleteError)
+          }
+        }
+      }
     }
 
     return versionedJson(

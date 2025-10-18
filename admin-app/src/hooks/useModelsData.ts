@@ -29,6 +29,7 @@ type UseModelsDataResult = {
   brandFilterOptions: string[]
   categoryOptions: ServiceCategory[]
   bannerError: string | null
+  refetchBrands: () => Promise<unknown>
 }
 
 export const useModelsData = ({ query, page, pageSize }: UseModelsDataParams): UseModelsDataResult => {
@@ -37,7 +38,11 @@ export const useModelsData = ({ query, page, pageSize }: UseModelsDataParams): U
     refetchOnMountOrArgChange: true,
   })
 
-  const { data: brandsResponse, error: brandsError } = useFetchBrandsQuery({
+  const {
+    data: brandsResponse,
+    error: brandsError,
+    refetch: refetchBrands,
+  } = useFetchBrandsQuery({
     limit: 200,
     sortStatus: 'none',
     sortUpdated: 'desc',
@@ -93,6 +98,7 @@ export const useModelsData = ({ query, page, pageSize }: UseModelsDataParams): U
     brandFilterOptions,
     categoryOptions,
     bannerError,
+    refetchBrands,
   }
 }
 

@@ -105,7 +105,7 @@ const ModelFormModal = ({ modal }: ModelFormModalProps) => {
               previewLabel="image"
               previewClassName="flex h-16 w-24 items-center justify-center overflow-hidden rounded-lg border border-brand-100/80 bg-brand-50"
               previewUrl={modal.imagePreviewUrl}
-              description="Stored in <code>public/assets/images/models</code>. 4&nbsp;MB limit."
+              description="Uploaded to Azure Blob Storage. 4&nbsp;MB limit."
               value={modal.values.imagePath}
               onChange={modal.onImagePathChange}
               onRemove={modal.onRemoveImage}
