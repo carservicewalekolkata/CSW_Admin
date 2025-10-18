@@ -7,9 +7,11 @@ import {
   usePrefetchServiceCategories,
   useCreateServiceCategoryMutation,
   useLazyFetchServiceCategoriesQuery,
+  addServiceCategory,
+  removeServiceCategory,
 } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
 import type { ServiceCategory, ServiceCategoryQuery } from '@/types/serviceCategories'
-import { useAppSelector } from '@/store/hooks'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { resolveServiceCategoryErrorMessage } from '@/utils/serviceCategories'
 import type {
   CreateModalState,
@@ -38,14 +40,14 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
 
+  const dispatch = useAppDispatch()
+
   const { error, isLoading, isFetching } = useFetchServiceCategoriesQuery(query)
   const [deleteServiceCategory] = useDeleteServiceCategoryMutation()
   const [createServiceCategory, { isLoading: isCreating }] = useCreateServiceCategoryMutation()
   const [fetchServiceCategoriesLazy, { isFetching: isLazyFetching }] = useLazyFetchServiceCategoriesQuery()
   const prefetchServiceCategories = usePrefetchServiceCategories()
-  const { items, total, status: categoriesStatus, lastQuery } = useAppSelector(
-    (state) => state.serviceCategories,
-  )
+  const { items, total, status: categoriesStatus } = useAppSelector((state) => state.serviceCategories)
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(page, totalPages)
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
@@ -72,11 +74,9 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
 
   const refreshWithLatestQuery = async (nextPage: number) => {
     const queryToUse: ServiceCategoryQuery = {
-      ...lastQuery,
-      search: lastQuery.search ?? (searchTerm || undefined),
-      sortUpdated: lastQuery.sortUpdated ?? dateSort,
+      ...query,
       page: nextPage,
-      limit: lastQuery.limit ?? pageSize,
+      limit: pageSize,
     }
 
     try {
@@ -110,13 +110,19 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
     try {
       setCreateError(null)
       const response = await createServiceCategory({ name: trimmed }).unwrap()
-      const createdName = response.data?.name ?? trimmed
+      const createdCategory = response.data
+      const createdName = createdCategory?.name ?? trimmed
+      if (createdCategory) {
+        dispatch(addServiceCategory(createdCategory))
+      }
       toast.success(`Created category: ${createdName}`)
       closeCreateModal()
       if (page !== 1) {
         setPage(1)
       }
-      await refreshWithLatestQuery(1)
+      if (!createdCategory || page !== 1) {
+        await refreshWithLatestQuery(1)
+      }
     } catch (err) {
       const message = resolveServiceCategoryErrorMessage(err, 'Failed to create service category')
       setCreateError(message)
@@ -132,6 +138,7 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
 
     try {
       await deleteServiceCategory(id).unwrap()
+      dispatch(removeServiceCategory(id))
       toast.success(`Deleted category: ${name}`)
       setDeleteTarget(null)
       if (shouldMovePrev) {
