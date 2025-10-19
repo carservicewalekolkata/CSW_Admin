@@ -1,5 +1,7 @@
-const DashboardSeedDataPage = () => {
-  return <div />
+import SeedDataFetchModule from '@/modules/SeedDataFetch'
+
+const DashboardSeedDataFetchPage = () => {
+  return <SeedDataFetchModule />
 }
 
-export default DashboardSeedDataPage
+export default DashboardSeedDataFetchPage

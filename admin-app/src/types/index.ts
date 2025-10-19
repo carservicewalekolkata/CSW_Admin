@@ -7,3 +7,4 @@ export * from "./serviceCategories";
 export * from "./roles";
 export * from "./services";
 export * from "./customerActivity";
+export * from "./seed";

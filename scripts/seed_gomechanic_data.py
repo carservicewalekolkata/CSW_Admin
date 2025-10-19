@@ -1,12 +1,14 @@
+import argparse
 import json
 import os
 import re
 import requests
 import threading
 import concurrent.futures as ThreadManager
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, UTC
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from requests.adapters import HTTPAdapter, Retry
@@ -15,29 +17,111 @@ from pymongo import MongoClient, ReturnDocument
 
 from gridfs import GridFS
 
+from azure.storage.blob import BlobServiceClient, ContentSettings
+from azure.core.exceptions import ResourceExistsError
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 ADMIN_APP_PUBLIC_DIR = PROJECT_ROOT / "admin-app" / "public"
 PUBLIC_ASSETS_DIR = ADMIN_APP_PUBLIC_DIR / "assets"
-PUBLIC_ASSETS_RELATIVE = PurePosixPath("assets")
-ASSETS_MODELS_DIR = PUBLIC_ASSETS_DIR / "images" / "models"
-ASSETS_MODELS_RELATIVE = PUBLIC_ASSETS_RELATIVE / "images" / "models"
-BATTERY_SERVICES_DIR = PUBLIC_ASSETS_DIR / "services" / "batteries"
-BATTERY_SERVICES_RELATIVE = PUBLIC_ASSETS_RELATIVE / "services" / "batteries"
 SERVICES_CACHE_PATH = PUBLIC_ASSETS_DIR / "services_cache.json"
 
+AZURE_STORAGE_SCHEME = "azure:"
+AZURE_MODEL_IMAGE_PREFIX = "images/models"
+AZURE_SERVICE_ASSET_PREFIX = "services"
 
-def resolve_public_asset_path(relative_path):
-  """
-  Resolve a relative asset path like 'assets/...' to the admin app public directory.
-  Handles already-absolute paths by returning them unchanged.
-  """
-  candidate = Path(relative_path)
-  if candidate.is_absolute():
-    return candidate
-  relative_parts = PurePosixPath(str(relative_path)).parts
-  return ADMIN_APP_PUBLIC_DIR.joinpath(*relative_parts)
+
+class AzureBlobUploader:
+
+  def __init__(self):
+    container = os.getenv("AZURE_STORAGE_CONTAINER")
+    if not container:
+      raise SystemExit("Missing AZURE_STORAGE_CONTAINER environment variable for Azure storage uploads.")
+
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    account = os.getenv("AZURE_STORAGE_ACCOUNT")
+    key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
+
+    try:
+      if connection_string:
+        service_client = BlobServiceClient.from_connection_string(connection_string)
+      else:
+        if not account or not key:
+          raise SystemExit(
+            "Provide AZURE_STORAGE_CONNECTION_STRING or both AZURE_STORAGE_ACCOUNT and AZURE_STORAGE_ACCOUNT_KEY for Azure uploads.",
+          )
+        account_url = f"https://{account}.blob.core.windows.net"
+        service_client = BlobServiceClient(account_url=account_url, credential=key)
+
+      container_client = service_client.get_container_client(container)
+      try:
+        container_client.create_container()
+      except ResourceExistsError:
+        pass
+
+      self._container_client = container_client
+    except Exception as err:
+      raise SystemExit(f"Failed to initialise Azure storage client: {err}")
+
+  def upload_bytes(self, blob_path: str, data: bytes, content_type: Optional[str] = None) -> None:
+    sanitized = blob_path.lstrip("/")
+    settings = ContentSettings(content_type=content_type) if content_type else None
+    self._container_client.upload_blob(
+      sanitized,
+      data,
+      overwrite=True,
+      content_settings=settings,
+    )
+
+  def delete_blob_if_exists(self, blob_path: str) -> None:
+    sanitized = blob_path.lstrip("/")
+    try:
+      self._container_client.delete_blob(sanitized)
+    except Exception:
+      # Swallow errors during cleanup to keep script resilient.
+      pass
+
+
+AZURE_UPLOADER = AzureBlobUploader()
+
+
+def guess_content_type(header_value: Optional[str], fallback_suffix: Optional[str]) -> Optional[str]:
+  if header_value:
+    candidate = header_value.split(";", 1)[0].strip()
+    if candidate:
+      return candidate
+
+  if not fallback_suffix:
+    return None
+
+  suffix = fallback_suffix.lower()
+  if suffix in {".png"}:
+    return "image/png"
+  if suffix in {".jpg", ".jpeg"}:
+    return "image/jpeg"
+  if suffix == ".webp":
+    return "image/webp"
+  if suffix == ".gif":
+    return "image/gif"
+  if suffix == ".svg":
+    return "image/svg+xml"
+  return None
+
+
+def build_azure_uri(blob_path: str) -> str:
+  sanitized = blob_path.lstrip("/")
+  return f"{AZURE_STORAGE_SCHEME}{sanitized}"
+
+
+def extract_azure_blob_name(value: Optional[str]) -> Optional[str]:
+  if not value:
+    return None
+  trimmed = str(value).strip()
+  if trimmed.startswith(AZURE_STORAGE_SCHEME):
+    candidate = trimmed[len(AZURE_STORAGE_SCHEME):].strip()
+    return candidate or None
+  return None
 
 
 def _load_environment():
@@ -71,25 +155,175 @@ BASE_URL_2 = "https://gomechanic.in/api"
 
 BRAND_ROUTE = "/v1/get-brands"
 MODEL_ROUTE = "/v2/oauth/vehicles/get_models_by_brand/?brand_id={}"
-SERVICES_ROUTE = "/v2/oauth/customer/get-services-details-by-category?car_id={}&city_id=144&category_id={}"
+SERVICES_ROUTE = "/v2/oauth/customer/get-services-details-by-category?car_id={car_id}&city_id={city_id}&category_id={category_id}"
 
-VALID_CATEGORY_IDS = [
-  "0",  # Car services
-  "13",  # AC Services & repairs
-  "-4",  # Batteries
-  "21",  # Tyres and wheels care
-  "16",  # Denting and Painting
-  "37",  # Detailing
+DEFAULT_CATEGORY_CONFIG = [
+  {"id": "0", "label": "Car services"},
+  {"id": "13", "label": "AC Services & repairs"},
+  {"id": "-4", "label": "Batteries"},
+  {"id": "21", "label": "Tyres and wheels care"},
+  {"id": "16", "label": "Denting and Painting"},
+  {"id": "37", "label": "Detailing"},
 ]
 
-CATEGORY_LABELS = {
-  "0": "Car services",
-  "13": "AC Services & repairs",
-  "-4": "Batteries",
-  "21": "Tyres and wheels care",
-  "16": "Denting and Painting",
-  "37": "Detailing",
-}
+DEFAULT_OPERATIONS = (
+  "seed-brands-data",
+  "seed-models-data",
+  "seed-services-categories",
+  "seed-services-data",
+)
+
+
+def normalize_category_config(raw_config: Any) -> List[Dict[str, Any]]:
+  """
+  Normalize category configuration into a list of dictionaries containing
+  the query id, label, and optional overrides.
+  """
+  if raw_config is None:
+    return []
+
+  if isinstance(raw_config, str):
+    raise TypeError("normalize_category_config expected a parsed JSON structure, not a string.")
+
+  if isinstance(raw_config, dict):
+    if "categories" in raw_config and isinstance(raw_config["categories"], list):
+      raw_entries = raw_config["categories"]
+    else:
+      raw_entries = [raw_config]
+  elif isinstance(raw_config, list):
+    raw_entries = raw_config
+  else:
+    raise ValueError("Category configuration must be a list or a dictionary with a 'categories' key.")
+
+  normalized: List[Dict[str, Any]] = []
+
+  for entry in raw_entries:
+    if not isinstance(entry, dict):
+      continue
+
+    category_id = entry.get("id") or entry.get("categoryId") or entry.get("category_id")
+    if category_id is None:
+      continue
+    category_id = str(category_id).strip()
+    if not category_id:
+      continue
+
+    label_raw = entry.get("label") or entry.get("name") or entry.get("title") or entry.get("writeAs")
+    label = str(label_raw).strip() if isinstance(label_raw, str) and label_raw.strip() else category_id
+
+    overrides_raw = entry.get("overrides") or []
+    overrides: List[Dict[str, Optional[str]]] = []
+    if isinstance(overrides_raw, list):
+      for override in overrides_raw:
+        if not isinstance(override, dict):
+          continue
+        override_id = override.get("id") or override.get("categoryId") or override.get("category_id")
+        override_id = str(override_id or category_id).strip()
+        api_name_raw = override.get("apiName") or override.get("api_name")
+        api_name = str(api_name_raw).strip() if isinstance(api_name_raw, str) and api_name_raw.strip() else None
+        write_as_raw = override.get("writeAs") or override.get("write_as") or override.get("label")
+        write_as = str(write_as_raw).strip() if isinstance(write_as_raw, str) and write_as_raw.strip() else None
+        overrides.append(
+          {
+            "id": override_id,
+            "apiName": api_name,
+            "writeAs": write_as,
+          }
+        )
+
+    normalized.append(
+      {
+        "id": category_id,
+        "label": label,
+        "overrides": overrides,
+      }
+    )
+
+  return normalized
+
+
+def load_category_config(category_json: Optional[str], category_config_path: Optional[str]) -> List[Dict[str, Any]]:
+  """
+  Resolve category configuration from CLI arguments, environment variables, or defaults.
+  Preference order:
+    1. Inline JSON passed via --category-json
+    2. JSON file path passed via --category-config
+    3. Environment variable GOMECHANIC_CATEGORY_CONFIG
+    4. DEFAULT_CATEGORY_CONFIG constant
+  """
+  source_payload: Optional[str] = None
+
+  if category_json:
+    source_payload = category_json
+  elif category_config_path:
+    path = Path(category_config_path)
+    if not path.exists():
+      raise SystemExit(f"Category config file not found: {path}")
+    source_payload = path.read_text(encoding="utf-8")
+  else:
+    env_payload = os.getenv("GOMECHANIC_CATEGORY_CONFIG")
+    if env_payload:
+      source_payload = env_payload
+
+  if source_payload:
+    try:
+      parsed = json.loads(source_payload)
+    except json.JSONDecodeError as err:
+      raise SystemExit(f"Failed to parse category configuration JSON: {err}") from err
+  else:
+    parsed = DEFAULT_CATEGORY_CONFIG
+
+  return normalize_category_config(parsed)
+
+
+def build_category_plan(category_config: List[Dict[str, Any]]) -> Dict[str, Any]:
+  """
+  Build a plan containing:
+    - query_ids: ordered list of category ids to request from the API
+    - label_lookup: mapping of query/api ids to the display label to persist
+    - api_name_overrides: overrides to map API category names to desired labels per query id
+  """
+  query_ids: List[str] = []
+  label_lookup: Dict[str, str] = {}
+  api_name_overrides: Dict[str, Dict[str, str]] = {}
+
+  for entry in category_config:
+    category_id = str(entry["id"]).strip()
+    if not category_id:
+      continue
+    if category_id not in query_ids:
+      query_ids.append(category_id)
+
+    label = entry.get("label") or category_id
+    if isinstance(label, str):
+      label_lookup[category_id] = label
+    else:
+      label_lookup[category_id] = category_id
+
+    overrides = entry.get("overrides") or []
+    if isinstance(overrides, list):
+      for override in overrides:
+        if not isinstance(override, dict):
+          continue
+        override_id = str((override.get("id") or category_id)).strip()
+        if override_id and override_id not in query_ids:
+          query_ids.append(override_id)
+
+        write_as = override.get("writeAs") or entry.get("label") or override_id
+        if isinstance(write_as, str) and write_as.strip():
+          label_lookup.setdefault(override_id, write_as.strip())
+
+        api_name = override.get("apiName")
+        if isinstance(api_name, str) and api_name.strip():
+          api_name_overrides.setdefault(override_id, {})[api_name.strip().lower()] = (
+            write_as.strip() if isinstance(write_as, str) and write_as.strip() else label_lookup.get(override_id, override_id)
+          )
+
+  return {
+    "query_ids": query_ids,
+    "label_lookup": label_lookup,
+    "api_name_overrides": api_name_overrides,
+  }
 
 client = MongoClient(MONGODB_URI)
 
@@ -126,7 +360,7 @@ def get_next_sequence(db, name, start_at=1):
 
 class CSW:
 
-  def __init__(self):
+  def __init__(self, city_id: Optional[str] = None):
     token = os.getenv("GOMECHANIC_BEARER_TOKEN")
     self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     self.api_headers = {
@@ -140,6 +374,10 @@ class CSW:
       "Accept": "*/*",
       "User-Agent": self.user_agent
     }
+
+    default_city = os.getenv("GOMECHANIC_CITY_ID") or "144"
+    resolved_city = str(city_id).strip() if isinstance(city_id, str) else default_city
+    self.city_id = resolved_city or "144"
 
     self.models = dict()
     self.prices = dict()
@@ -545,14 +783,20 @@ class CSW:
 
     print("[+] Brands synced to MongoDB")
 
-  def fetch_models(self, db):
+  def fetch_models(
+    self,
+    db,
+    category_plan: Dict[str, Any],
+    *,
+    seed_models: bool = True,
+    seed_service_categories: bool = True,
+    seed_services: bool = True,
+  ):
     """
     Fetch model data by brand, manage thumbnails in GridFS, download hero images locally,
     and upsert into MongoDB with foreign key reference to brands.
     """
     fs = GridFS(db)
-    ASSETS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    BATTERY_SERVICES_DIR.mkdir(parents=True, exist_ok=True)
     SERVICES_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     print_lock = threading.Lock()
@@ -560,6 +804,31 @@ class CSW:
     def log(message):
       with print_lock:
         print(message)
+
+    category_query_ids = [
+      str(value).strip()
+      for value in category_plan.get("query_ids", [])
+      if isinstance(value, (str, int)) and str(value).strip()
+    ]
+    category_label_lookup_raw = category_plan.get("label_lookup") or {}
+    category_label_lookup = {
+      str(key).strip(): str(value)
+      for key, value in category_label_lookup_raw.items()
+      if isinstance(key, (str, int)) and str(key).strip()
+    }
+    api_name_overrides_raw = category_plan.get("api_name_overrides") or {}
+    api_name_overrides = {
+      str(query_id).strip(): {
+        str(api_name).strip().lower(): str(label)
+        for api_name, label in (overrides or {}).items()
+        if isinstance(api_name, str) and api_name.strip() and isinstance(label, str) and label.strip()
+      }
+      for query_id, overrides in api_name_overrides_raw.items()
+      if isinstance(query_id, (str, int))
+    }
+
+    if (seed_service_categories or seed_services) and not category_query_ids:
+      raise SystemExit("No category ids supplied for service ingestion. Provide at least one category id.")
 
     category_cache = {}
     category_cache_lock = threading.Lock()
@@ -640,35 +909,11 @@ class CSW:
       if not image_url:
         return None
 
-      parsed = urlparse(image_url)
-      suffix = Path(parsed.path).suffix.lower()
-      if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
-        suffix = ".jpg"
-
       service_part = self._sanitize_filename(service_name, "battery-service")
-      filename = f"{service_part}{suffix}"
-      local_path = BATTERY_SERVICES_DIR.joinpath(filename)
-      relative_path = (BATTERY_SERVICES_RELATIVE / filename).as_posix()
-
       with battery_thumbnail_lock:
         cached_path = battery_thumbnail_cache.get(service_part)
       if cached_path:
-        cached_file = resolve_public_asset_path(cached_path)
-        try:
-          if cached_file.exists() and cached_file.stat().st_size > 0:
-            return cached_path
-        except OSError:
-          pass
-        with battery_thumbnail_lock:
-          battery_thumbnail_cache.pop(service_part, None)
-
-      try:
-        if local_path.exists() and local_path.stat().st_size > 0:
-          with battery_thumbnail_lock:
-            battery_thumbnail_cache.setdefault(service_part, relative_path)
-          return relative_path
-      except OSError:
-        pass
+        return cached_path
 
       try:
         response = asset_session.get(image_url, timeout=20)
@@ -677,30 +922,46 @@ class CSW:
         log(f"[!] Failed to download battery thumbnail for {service_name} (model {model_id}): {fetch_err}")
         return None
 
-      temp_path = local_path.parent.joinpath(f"{filename}.{threading.get_ident()}.tmp")
+      parsed = urlparse(image_url)
+      suffix = Path(parsed.path).suffix.lower()
+      if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+        suffix = ".jpg"
+
+      filename = f"{service_part}{suffix}"
+      blob_path = f"{AZURE_SERVICE_ASSET_PREFIX}/batteries/{filename}"
+      content_type = guess_content_type(response.headers.get("Content-Type"), suffix)
 
       try:
-        temp_path.write_bytes(response.content)
-        temp_path.replace(local_path)
-      except Exception as io_err:
-        log(f"[!] Failed to store battery thumbnail for {service_name} (model {model_id}): {io_err}")
-        try:
-          if temp_path.exists():
-            temp_path.unlink()
-        except Exception:
-          pass
+        AZURE_UPLOADER.upload_bytes(blob_path, response.content, content_type)
+      except Exception as upload_err:
+        log(f"[!] Failed to upload battery thumbnail for {service_name} (model {model_id}) to Azure: {upload_err}")
         return None
 
+      azure_uri = build_azure_uri(blob_path)
       with battery_thumbnail_lock:
-        battery_thumbnail_cache[service_part] = relative_path
-      return relative_path
+        battery_thumbnail_cache[service_part] = azure_uri
+      return azure_uri
 
     def ensure_service_category(category_api_id, category_name, category_key=None):
       preferred_label = None
-      if category_key is not None and category_key in CATEGORY_LABELS:
-        preferred_label = CATEGORY_LABELS[category_key]
-      elif category_api_id is not None and str(category_api_id) in CATEGORY_LABELS:
-        preferred_label = CATEGORY_LABELS[str(category_api_id)]
+      normalized_category_key = str(category_key).strip() if category_key is not None else None
+
+      if normalized_category_key:
+        preferred_label = category_label_lookup.get(normalized_category_key)
+
+      if preferred_label is None and category_api_id is not None:
+        preferred_label = category_label_lookup.get(str(category_api_id))
+
+      normalized_api_name = str(category_name or "").strip().lower()
+      override_lookup = {}
+
+      if normalized_category_key:
+        override_lookup = api_name_overrides.get(normalized_category_key, {})
+      if not override_lookup and category_api_id is not None:
+        override_lookup = api_name_overrides.get(str(category_api_id), {})
+
+      if preferred_label is None and normalized_api_name and override_lookup:
+        preferred_label = override_lookup.get(normalized_api_name)
 
       fallback_label = str(category_name or f"Category {category_api_id if category_api_id is not None else 'unknown'}").strip()
       if not fallback_label:
@@ -750,10 +1011,14 @@ class CSW:
           if fallback:
             category_cache[cache_key] = fallback["id"]
             return fallback["id"]
-          category_cache[cache_key] = new_id
-          return new_id
 
         category_cache[cache_key] = new_id
+
+        if category_api_id is not None:
+          category_label_lookup.setdefault(str(category_api_id), normalized_name)
+        if normalized_category_key:
+          category_label_lookup.setdefault(normalized_category_key, normalized_name)
+
         return new_id
 
     def ensure_service_document(category_internal_id, category_display_name, service_name,
@@ -833,12 +1098,20 @@ class CSW:
 
     def sync_services_for_model(api_session, asset_session, api_model_id, model_id, model_label):
       model_services_map = {}
-      for category_param in VALID_CATEGORY_IDS:
+      for category_param in category_query_ids:
+        category_param_str = str(category_param).strip()
+        if not category_param_str:
+          continue
         try:
-          resp = api_session.get(BASE_URL + SERVICES_ROUTE.format(api_model_id, category_param), timeout=25)
+          url = BASE_URL + SERVICES_ROUTE.format(
+            car_id=api_model_id,
+            city_id=self.city_id,
+            category_id=category_param_str,
+          )
+          resp = api_session.get(url, timeout=25)
           resp.raise_for_status()
         except Exception as err:
-          log(f"[!] Failed to fetch services for {model_label} ({api_model_id}) category {category_param}: {err}")
+          log(f"[!] Failed to fetch services for {model_label} ({api_model_id}) category {category_param_str}: {err}")
           continue
 
         payload = resp.json()
@@ -859,18 +1132,25 @@ class CSW:
           except (TypeError, ValueError):
             category_api_id = None
 
-          category_internal_id = ensure_service_category(category_api_id, category_name, category_param)
-          category_display_name = CATEGORY_LABELS.get(category_param)
+          category_internal_id = ensure_service_category(category_api_id, category_name, category_param_str)
+
+          category_display_name = category_label_lookup.get(category_param_str)
           if category_display_name is None and category_api_id is not None:
-            category_display_name = CATEGORY_LABELS.get(str(category_api_id))
+            category_display_name = category_label_lookup.get(str(category_api_id))
           if category_display_name is None:
-            category_display_name = category_name
+            overrides = api_name_overrides.get(category_param_str) or api_name_overrides.get(str(category_api_id), {})
+            normalized_api_name = category_name.lower()
+            category_display_name = overrides.get(normalized_api_name, category_name)
+
+          if category_api_id is not None and category_display_name:
+            category_label_lookup.setdefault(str(category_api_id), category_display_name)
+
           services_list = category_entry.get("services") or []
           if not isinstance(services_list, list):
             continue
 
           processed = 0
-          is_battery_category = (category_param == "-4") or (category_api_id == -4)
+          is_battery_category = (category_param_str == "-4") or (category_api_id == -4)
           for service_entry in services_list:
             service_name_value = service_entry.get("name") or service_entry.get("service_name")
             base_service_name = str(service_name_value).strip() if service_name_value else None
@@ -1051,7 +1331,10 @@ class CSW:
           log(f"[i] Assigned incremental model id {model_id} to {model.get('name')} ({api_model_id})")
 
         model_label = f"{brand_name} - {model.get('name') or api_model_id}"
-        model_services = sync_services_for_model(api_session, asset_session, api_model_id, model_id, model_label)
+        if seed_service_categories or seed_services:
+          model_services = sync_services_for_model(api_session, asset_session, api_model_id, model_id, model_label)
+        else:
+          model_services = []
 
         old_thumbnail_id = existing_doc.get("thumbnail") if existing_doc else None
         thumbnail_for_doc = old_thumbnail_id
@@ -1088,77 +1371,148 @@ class CSW:
             parsed = urlparse(image_url)
             suffix = Path(parsed.path).suffix or ".png"
             file_name = f"{self._sanitize_filename(brand_slug, brand_id)}_{self._sanitize_filename(model.get('slug'), model_id)}{suffix}"
-            local_path = ASSETS_MODELS_DIR.joinpath(file_name)
-            temp_path = local_path.with_suffix(f"{local_path.suffix}.tmp")
-            temp_path.write_bytes(image_resp.content)
-            temp_path.replace(local_path)
-            image_relative_path = (ASSETS_MODELS_RELATIVE / file_name).as_posix()
+            blob_path = f"{AZURE_MODEL_IMAGE_PREFIX}/{file_name}"
+            content_type = guess_content_type(image_resp.headers.get("Content-Type"), suffix)
+            AZURE_UPLOADER.upload_bytes(blob_path, image_resp.content, content_type)
+            image_relative_path = build_azure_uri(blob_path)
           except Exception as err:
             log(f"[!] Failed to download image for model {model.get('name')} ({model_id}): {err}")
 
         image_for_doc = image_relative_path or old_image_path
 
         if old_image_path and image_relative_path and old_image_path != image_relative_path:
-          try:
-            old_path = Path(old_image_path)
-            if not old_path.is_absolute():
-              old_path = resolve_public_asset_path(old_image_path)
-            if old_path.exists():
-              old_path.unlink()
-              log(f"[i] Removed previous image for model id {model_id}")
-          except Exception as delete_err:
-            log(f"[!] Failed to remove old image for model id {model_id}: {delete_err}")
+          blob_name = extract_azure_blob_name(old_image_path)
+          if blob_name:
+            AZURE_UPLOADER.delete_blob_if_exists(blob_name)
+            log(f"[i] Removed previous Azure model image for model id {model_id}")
 
         fuel_names = [entry.get("name") for entry in model.get("fuel", []) if entry.get("name")]
 
-        if (not model_services) and existing_doc and existing_doc.get("services"):
-          preserved_services = existing_doc.get("services")
-          model_services = preserved_services if isinstance(preserved_services, list) else []
-        else:
-          model_services = model_services or []
+        if seed_models:
+          if (not model_services) and existing_doc and existing_doc.get("services"):
+            preserved_services = existing_doc.get("services")
+            model_services = preserved_services if isinstance(preserved_services, list) else []
+          else:
+            model_services = model_services or []
 
         resolved_brand_name = brand_name or (existing_doc.get("brand_name") if existing_doc else None) or f"Brand {brand_id}"
 
-        doc = {
-          "id": model_id,
-          "name": model.get("name"),
-          "thumbnail": thumbnail_for_doc,
-          "image": image_for_doc or "",
-          "body_type": model.get("Segment"),
-          "brand_id": brand_id,
-          "brand_name": str(resolved_brand_name),
-          "fuel_type": fuel_names,
-          "slug": model.get("slug"),
-          "services": model_services,
-          "status": bool(True),
-          "updated_date": now
-        }
+        if seed_models:
+          doc = {
+            "id": model_id,
+            "name": model.get("name"),
+            "thumbnail": thumbnail_for_doc,
+            "image": image_for_doc or "",
+            "body_type": model.get("Segment"),
+            "brand_id": brand_id,
+            "brand_name": str(resolved_brand_name),
+            "fuel_type": fuel_names,
+            "slug": model.get("slug"),
+            "services": model_services,
+            "status": bool(True),
+            "updated_date": now
+          }
 
-        log(f"Model doc: {doc}")
+          log(f"Model doc: {doc}")
 
-        update_payload = {"$set": doc, "$unset": {"api_id": ""}}
+          update_payload = {"$set": doc, "$unset": {"api_id": ""}}
 
-        if existing_doc is None:
-          update_payload["$setOnInsert"] = {"created_date": now}
-        elif not existing_doc.get("created_date"):
-          update_payload["$set"]["created_date"] = now
+          if existing_doc is None:
+            update_payload["$setOnInsert"] = {"created_date": now}
+          elif not existing_doc.get("created_date"):
+            update_payload["$set"]["created_date"] = now
 
-        db.models.update_one({"id": model_id}, update_payload, upsert=True)
+          db.models.update_one({"id": model_id}, update_payload, upsert=True)
 
     with ThreadManager.ThreadPoolExecutor(max_workers=min(8, (os.cpu_count() or 4))) as executor:
       list(executor.map(process_brand_models, brand_records))
 
-    print("[+] Models synced to MongoDB")
+    synced_parts = []
+    if seed_models:
+      synced_parts.append("models")
+    if seed_service_categories:
+      synced_parts.append("service categories")
+    if seed_services:
+      synced_parts.append("services")
+    if synced_parts:
+      print(f"[+] {' / '.join(synced_parts)} synced to MongoDB")
+
+def parse_arguments():
+  parser = argparse.ArgumentParser(description="Seed GoMechanic data into MongoDB.")
+  parser.add_argument(
+    "--operations",
+    nargs="+",
+    choices=DEFAULT_OPERATIONS,
+    metavar="OPERATION",
+    help="Operations to execute (default: all). Choose from %(choices)s.",
+    default=list(DEFAULT_OPERATIONS),
+  )
+  parser.add_argument(
+    "--category-json",
+    help="Inline JSON string describing category configuration (id, label, overrides).",
+  )
+  parser.add_argument(
+    "--category-config",
+    help="Path to a JSON file describing the category configuration.",
+  )
+  parser.add_argument(
+    "--city-id",
+    help="Override the default city id used when fetching services (default: 144 or GOMECHANIC_CITY_ID).",
+  )
+  return parser.parse_args()
+
 
 def main():
-  csw_data = CSW()
-  print("[+] Starting data fetching of Go Mechanic\n")
+  args = parse_arguments()
 
-  print("[+] Starting brands of Go Mechanic\n")
-  csw_data.fetch_brands(db)
+  try:
+    category_config = load_category_config(args.category_json, args.category_config)
+  except Exception as cfg_err:
+    raise SystemExit(f"Failed to load category configuration: {cfg_err}") from cfg_err
 
-  print("[+] Starting models of Go Mechanic\n")
-  csw_data.fetch_models(db)
+  category_plan = build_category_plan(category_config)
+
+  operations = set(args.operations or [])
+  if not operations:
+    operations = set(DEFAULT_OPERATIONS)
+
+  seed_brands = "seed-brands-data" in operations
+  seed_models = "seed-models-data" in operations
+  seed_service_categories = "seed-services-categories" in operations
+  seed_services = "seed-services-data" in operations
+
+  if seed_services:
+    seed_service_categories = True
+
+  csw_data = CSW(city_id=args.city_id)
+  print("[+] Starting data ingestion for GoMechanic\n")
+
+  if seed_brands:
+    print("[+] Seeding GoMechanic brands data\n")
+    csw_data.fetch_brands(db)
+  else:
+    print("[i] Skipping brand seeding.")
+
+  if seed_models or seed_service_categories or seed_services:
+    planned = []
+    if seed_models:
+      planned.append("models")
+    if seed_service_categories and seed_services:
+      planned.append("service categories + services")
+    elif seed_service_categories:
+      planned.append("service categories")
+    elif seed_services:
+      planned.append("services")
+    print(f"[+] Seeding GoMechanic {', '.join(planned)}\n")
+    csw_data.fetch_models(
+      db,
+      category_plan,
+      seed_models=seed_models,
+      seed_service_categories=seed_service_categories,
+      seed_services=seed_services,
+    )
+  else:
+    print("[i] Skipping model/service ingestion.")
 
 if __name__ == "__main__":
   try:
@@ -1169,4 +1523,3 @@ if __name__ == "__main__":
 
   except Exception as err:
       print(f"[-] Unhandled exception: {str(err)}")
-
