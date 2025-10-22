@@ -124,6 +124,35 @@ def extract_azure_blob_name(value: Optional[str]) -> Optional[str]:
   return None
 
 
+def trigger_vehicle_sitemap_sync(reason: str = "seed") -> None:
+  endpoint = SITEMAP_SYNC_ENDPOINT
+  if not endpoint:
+    return
+
+  headers = {
+    "Content-Type": "application/json",
+  }
+  if SITEMAP_SYNC_TOKEN:
+    headers["X-Internal-Token"] = SITEMAP_SYNC_TOKEN
+
+  try:
+    resp = requests.post(
+      endpoint,
+      json={"mode": "rebuild"},
+      headers=headers,
+      timeout=30,
+    )
+    resp.raise_for_status()
+    try:
+      payload = resp.json()
+    except Exception:
+      payload = {}
+    scope = payload.get("scope") or "rebuild"
+    print(f"[+] Vehicle sitemap sync triggered ({reason}) -> {scope}")
+  except Exception as err:
+    print(f"[!] Failed to trigger vehicle sitemap sync ({reason}): {err}")
+
+
 def _load_environment():
   """Load optional .env files for local use without overriding host environment."""
   env_loaded = False
@@ -156,6 +185,20 @@ BASE_URL_2 = "https://gomechanic.in/api"
 BRAND_ROUTE = "/v1/get-brands"
 MODEL_ROUTE = "/v2/oauth/vehicles/get_models_by_brand/?brand_id={}"
 SERVICES_ROUTE = "/v2/oauth/customer/get-services-details-by-category?car_id={car_id}&city_id={city_id}&category_id={category_id}"
+
+def _resolve_sitemap_sync_endpoint() -> str:
+  explicit = os.getenv("CSW_SITEMAP_SYNC_URL")
+  if explicit and explicit.strip():
+    return explicit.strip().rstrip("/")
+
+  backend_base = os.getenv("CSW_BACKEND_URL") or os.getenv("CSW_BACKEND_API")
+  if backend_base and backend_base.strip():
+    return f"{backend_base.strip().rstrip('/')}/v1/seo/sitemaps"
+
+  return "https://control.carservicewale.com/api/v1/seo/sitemaps"
+
+SITEMAP_SYNC_ENDPOINT = _resolve_sitemap_sync_endpoint()
+SITEMAP_SYNC_TOKEN = (os.getenv("CSW_SITEMAP_SYNC_TOKEN") or os.getenv("CSW_INTERNAL_SYNC_TOKEN") or "").strip()
 
 DEFAULT_CATEGORY_CONFIG = [
   {"id": "0", "label": "Car services"},
@@ -1436,6 +1479,8 @@ class CSW:
       synced_parts.append("services")
     if synced_parts:
       print(f"[+] {' / '.join(synced_parts)} synced to MongoDB")
+    if seed_models:
+      trigger_vehicle_sitemap_sync(reason="seed_models")
 
 def parse_arguments():
   parser = argparse.ArgumentParser(description="Seed GoMechanic data into MongoDB.")

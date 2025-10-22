@@ -14,6 +14,10 @@ import {
   deleteModelImageIfExists,
   extractModelImageBlobName,
 } from '@/lib/azureStorage'
+import {
+  removeVehicleSitemapsForModel,
+  syncVehicleSitemapsForModel,
+} from '@/server/seo/vehicleSitemaps'
 
 type RawModelService = {
   services_id: unknown
@@ -165,6 +169,38 @@ const resolveModelImage = (value?: string | null): ResolvedModelImage => {
   return {
     view: `/${normalized}`,
     raw: normalized,
+  }
+}
+
+const toLeanModelForSitemaps = (
+  model: RawModel,
+  fallbackDate: Date,
+): Parameters<typeof syncVehicleSitemapsForModel>[1] => {
+  const parsedUpdatedDate =
+    model.updated_date instanceof Date
+      ? model.updated_date
+      : typeof model.updated_date === 'string'
+        ? new Date(model.updated_date)
+        : fallbackDate
+
+  const safeUpdatedDate =
+    parsedUpdatedDate instanceof Date && !Number.isNaN(parsedUpdatedDate.getTime())
+      ? parsedUpdatedDate
+      : fallbackDate
+
+  const fuelTypes = Array.isArray(model.fuel_type)
+    ? model.fuel_type.filter((fuel): fuel is string => typeof fuel === 'string' && fuel.trim().length > 0)
+    : []
+
+  return {
+    id: model.id,
+    name: model.name,
+    slug: model.slug,
+    brand_id: model.brand_id,
+    brand_name: model.brand_name,
+    fuel_type: fuelTypes,
+    status: model.status !== false,
+    updated_date: safeUpdatedDate,
   }
 }
 
@@ -454,8 +490,8 @@ export async function POST(request: Request) {
 
     const Brand = getBrandModel(connection)
     const brandDoc = await Brand.findOne({ slug: brandSlug })
-      .select(['id', 'name'])
-      .lean<{ id?: unknown; name?: unknown }>()
+      .select(['id', 'name', 'slug', 'status'])
+      .lean<{ id?: unknown; name?: unknown; slug?: unknown; status?: unknown }>()
 
     if (!brandDoc) {
       return versionedJson(
@@ -616,8 +652,19 @@ export async function POST(request: Request) {
     })
 
     const created = createdDoc.toObject() as RawModel & { thumbnail?: unknown }
+    const leanCreated = toLeanModelForSitemaps(created, now)
     const thumbnailId = normalizeIconId(created.thumbnail)
     const createdImage = resolveModelImage(created.image)
+
+    await syncVehicleSitemapsForModel(connection, leanCreated, {
+      slug: slugify(
+        typeof brandDoc.slug === 'string' && brandDoc.slug.trim().length > 0
+          ? brandDoc.slug
+          : brandSlug,
+      ),
+      name: brandName,
+      status: brandDoc.status !== false,
+    })
 
     return versionedJson(
       {
@@ -941,8 +988,11 @@ export async function PATCH(request: Request) {
     }
 
     const updated = updatedDoc.toObject() as RawModel & { thumbnail?: unknown }
+    const leanUpdated = toLeanModelForSitemaps(updated, now)
     const thumbnailId = normalizeIconId(updated.thumbnail)
     const updatedImage = resolveModelImage(updated.image)
+
+    await syncVehicleSitemapsForModel(connection, leanUpdated)
 
     const bucket = connection.db ? new GridFSBucket(connection.db, { bucketName: 'fs' }) : null
     if (iconChanged) {
@@ -1036,6 +1086,17 @@ export async function DELETE(request: Request) {
         { success: false, message: 'Model not found' },
         { status: 404 },
       )
+    }
+
+    const deletedId =
+      typeof deleted.id === 'number'
+        ? deleted.id
+        : typeof deleted.id === 'string'
+          ? Number(deleted.id)
+          : NaN
+
+    if (Number.isFinite(deletedId)) {
+      await removeVehicleSitemapsForModel(connection, Number(deletedId))
     }
 
     const deletedImage =

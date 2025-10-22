@@ -1,0 +1,14 @@
+{
+  "requests": [
+    {
+      "id": "3b5463c9-8707-42c9-bb7f-99832aeeb3da",
+      "phone": "9163429131",
+      "codeHash": "72fb5ea08d196a2245e362ec97a7bb45d3b34d1397b9ebbbf5c3e6656382a9e8",
+      "createdAt": "2025-10-22T18:01:00.893Z",
+      "updatedAt": "2025-10-22T18:01:00.893Z",
+      "expiresAt": "2025-10-22T18:02:00.893Z",
+      "attempts": 0,
+      "maxAttempts": 5
+    }
+  ]
+}

@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server'
 import {
   CustomerActivityError,
   listCustomerSessions,
-  MOCK_OTP_CODE,
   recordCustomerActivity,
   type CustomerActivityVehicle,
 } from '@/server/customerActivityStore'
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
     }
 
     const phone = typeof payload?.phone === 'string' ? payload.phone.trim() : ''
-    const otpCode = typeof payload?.otpCode === 'string' ? payload.otpCode.trim() : ''
+    const otpRequestId = typeof payload?.otpRequestId === 'string' ? payload.otpRequestId.trim() : ''
 
     if (!phone) {
       const response = NextResponse.json({ message: 'Phone number is required.' }, { status: 400 })
@@ -66,13 +65,17 @@ export async function POST(request: Request) {
       return applyCors(request, response)
     }
 
-    if (otpCode !== MOCK_OTP_CODE) {
-      const response = NextResponse.json({ message: 'Invalid OTP supplied.' }, { status: 401 })
+    if (!otpRequestId) {
+      const response = NextResponse.json(
+        { message: 'OTP verification reference is missing. Please try again.' },
+        { status: 400 },
+      )
       return applyCors(request, response)
     }
 
     const { session, entry } = await recordCustomerActivity({
       phone,
+      otpRequestId,
       vehicle,
     })
 

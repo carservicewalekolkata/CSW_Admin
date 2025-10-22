@@ -6,6 +6,10 @@ import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
 import { getBrandModel } from '@/models'
 import { applyCors, corsPreflight } from '@/server/cors'
+import {
+  removeVehicleSitemapsForBrand,
+  syncVehicleSitemapsForBrand,
+} from '@/server/seo/vehicleSitemaps'
 
 type RawBrand = {
   id: number
@@ -505,6 +509,8 @@ export async function PATCH(request: Request) {
       }
     }
 
+    await syncVehicleSitemapsForBrand(connection, updated)
+
     return versionedJson({
       success: true,
       data: {
@@ -555,6 +561,17 @@ export async function DELETE(request: Request) {
         { success: false, message: 'Brand not found' },
         { status: 404 },
       )
+    }
+
+    const brandId =
+      typeof deleted.id === 'number'
+        ? deleted.id
+        : typeof deleted.id === 'string'
+          ? Number(deleted.id)
+          : NaN
+
+    if (Number.isFinite(brandId)) {
+      await removeVehicleSitemapsForBrand(connection, Number(brandId))
     }
 
     return versionedJson(

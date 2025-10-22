@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type FC } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type FC, type FocusEvent } from 'react'
 
 import { FiPlus, FiTrash2 } from 'react-icons/fi'
 
 import { gomechanicCategories, GOMECHANIC_DEFAULT_CITY_ID } from '../data/gomechanicCategories'
 import { gomechanicOperations } from '../data/gomechanicOperations'
+import { APIEndpoint } from '@/APIEndpoints'
 
 const DEFAULT_MONGODB_URI =
   process.env.NEXT_PUBLIC_SEED_MONGODB_URI ?? 'mongodb+srv://seed-user:secure-password@cluster.mongodb.net/cswdb'
@@ -16,10 +17,26 @@ const DEFAULT_GOMECHANIC_TOKEN =
 
 type SubmissionStatus = 'idle' | 'submitting' | 'success'
 
-interface CategoryOverride {
-  id: string
-  apiName: string
-  writeAs: string
+interface CustomCategory {
+  key: string
+  label: string
+  description?: string
+  sourceCategoryId?: string | null
+}
+
+interface AvailableCategory {
+  key: string
+  label: string
+  description?: string
+  sourceCategoryId?: string | null
+}
+
+type CategoryPersistStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+interface CategoryPersistMeta {
+  status: CategoryPersistStatus
+  message?: string
+  lastSavedName?: string
 }
 
 interface FormState {
@@ -31,21 +48,26 @@ interface FormState {
   dryRun: boolean
   categories: Record<string, boolean>
   operations: Record<string, boolean>
-  categoryOverrides: Record<string, CategoryOverride[]>
   categoryParams: Record<string, string>
+  customCategories: CustomCategory[]
 }
 
-const createInitialCategories = () =>
-  Object.fromEntries(gomechanicCategories.map((category) => [category.id, true]))
+const createInitialCategories = () => ({})
 
 const createInitialOperations = () =>
   Object.fromEntries(gomechanicOperations.map((operation) => [operation.id, true]))
 
-const createInitialOverrides = () =>
-  Object.fromEntries(gomechanicCategories.map((category) => [category.id, [] as CategoryOverride[]]))
+const createInitialCategoryParams = () => ({})
 
-const createInitialCategoryParams = () =>
-  Object.fromEntries(gomechanicCategories.map((category) => [category.id, category.id]))
+const generateCustomCategoryKey = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+const sanitizeCategoryParam = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s_-]/g, '')
+    .replace(/\s+/g, '-')
+
 
 const createInitialFormState = (): FormState => ({
   mongodbUri: DEFAULT_MONGODB_URI,
@@ -56,8 +78,8 @@ const createInitialFormState = (): FormState => ({
   dryRun: false,
   categories: createInitialCategories(),
   operations: createInitialOperations(),
-  categoryOverrides: createInitialOverrides(),
   categoryParams: createInitialCategoryParams(),
+  customCategories: [],
 })
 
 const GomechanicPanel: FC = () => {
@@ -67,6 +89,7 @@ const GomechanicPanel: FC = () => {
   const [logEntries, setLogEntries] = useState<string[]>([])
   const [isConsoleOpen, setIsConsoleOpen] = useState(false)
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [categoryPersistState, setCategoryPersistState] = useState<Record<string, CategoryPersistMeta>>({})
   const consoleEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -75,19 +98,28 @@ const GomechanicPanel: FC = () => {
     }
   }, [logEntries, isConsoleOpen])
 
+  const activeCategories = useMemo<AvailableCategory[]>(() => {
+    return formState.customCategories.map<AvailableCategory>((category) => ({
+      key: category.key,
+      label: category.label,
+      description: category.description,
+      sourceCategoryId: category.sourceCategoryId ?? null,
+    }))
+  }, [formState.customCategories])
+
   const selectedCategoryParams = useMemo(
     () =>
-      Object.entries(formState.categories)
-        .filter(([, include]) => include)
-        .map(([categoryKey]) => {
-          const candidate = formState.categoryParams[categoryKey]
+      activeCategories
+        .filter((category) => formState.categories[category.key])
+        .map((category) => {
+          const candidate = formState.categoryParams[category.key]
           if (typeof candidate === 'string' && candidate.trim()) {
             return candidate.trim()
           }
-          return categoryKey
+          return ''
         })
         .filter((value) => Boolean(value)),
-    [formState.categories, formState.categoryParams],
+    [activeCategories, formState.categories, formState.categoryParams],
   )
 
   const selectedOperations = useMemo(
@@ -102,22 +134,18 @@ const GomechanicPanel: FC = () => {
 
   const selectedCategorySummaries = useMemo(
     () =>
-      gomechanicCategories
-        .filter((category) => formState.categories[category.id])
-        .map((category) => ({
-          id: formState.categoryParams[category.id]?.trim() || category.id,
-          label: category.label,
-        })),
-    [formState.categories, formState.categoryParams],
-  )
-
-  const totalOverrides = useMemo(
-    () =>
-      Object.values(formState.categoryOverrides ?? {}).reduce(
-        (accumulator, overrides) => accumulator + overrides.length,
-        0,
-      ),
-    [formState.categoryOverrides],
+      activeCategories
+        .filter((category) => formState.categories[category.key])
+        .map((category) => {
+          const rawParam = formState.categoryParams[category.key]?.trim()
+          const effectiveParam = rawParam || 'Pending ID'
+          const displayLabel = category.label?.trim() || 'Custom category'
+          return {
+            id: effectiveParam,
+            label: displayLabel,
+          }
+        }),
+    [activeCategories, formState.categories, formState.categoryParams],
   )
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -129,7 +157,82 @@ const GomechanicPanel: FC = () => {
     }))
   }
 
+  const persistServiceCategory = async (categoryKey: string, rawName: string) => {
+    const trimmedName = rawName.trim()
+    if (!trimmedName) {
+      setCategoryPersistState((previous) => ({
+        ...previous,
+        [categoryKey]: {
+          status: 'error',
+          message: 'Category name is required.',
+          lastSavedName: previous[categoryKey]?.lastSavedName,
+        },
+      }))
+      return { success: false, message: 'Category name is required.' }
+    }
+
+    const current = categoryPersistState[categoryKey]
+
+    if (current?.status === 'saving') {
+      return { success: false, message: 'Category is already being saved.' }
+    }
+
+    if (current?.status === 'saved' && current.lastSavedName === trimmedName.toLowerCase()) {
+      return { success: true as const }
+    }
+
+    setCategoryPersistState((previous) => ({
+      ...previous,
+      [categoryKey]: { status: 'saving', message: undefined, lastSavedName: current?.lastSavedName },
+    }))
+
+    try {
+      const serviceCategoryUrl = `${APIEndpoint.BackendUrl}${APIEndpoint.services.servicesCategory}`
+      const response = await fetch(serviceCategoryUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: trimmedName }),
+        credentials: 'include',
+      })
+
+      if (!response.ok && response.status !== 409) {
+        const data = (await response.json().catch(() => null)) as { message?: string } | null
+        const message = data?.message ?? 'Failed to create service category.'
+        throw new Error(message)
+      }
+
+      const normalizeName = trimmedName.toLowerCase()
+
+      setCategoryPersistState((previous) => ({
+        ...previous,
+        [categoryKey]: {
+          status: 'saved',
+          message: response.status === 409 ? 'Service category already exists.' : undefined,
+          lastSavedName: normalizeName,
+        },
+      }))
+
+      return { success: true as const }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create service category.'
+
+      setCategoryPersistState((previous) => ({
+        ...previous,
+        [categoryKey]: {
+          status: 'error',
+          message,
+          lastSavedName: previous[categoryKey]?.lastSavedName,
+        },
+      }))
+
+      return { success: false as const, message }
+    }
+  }
+
   const handleCategoryToggle = (categoryId: string) => {
+    const willEnable = !formState.categories[categoryId]
     setFormState((previous) => ({
       ...previous,
       categories: {
@@ -137,68 +240,205 @@ const GomechanicPanel: FC = () => {
         [categoryId]: !previous.categories[categoryId],
       },
     }))
+    if (willEnable) {
+      const category = formState.customCategories.find((item) => item.key === categoryId)
+      if (category?.label.trim()) {
+        void persistServiceCategory(categoryId, category.label)
+      }
+    }
   }
 
   const handleCategoryParamChange = (categoryId: string, value: string) => {
     const sanitizedValue = value.replace(/\s+/g, '')
+    setFormState((previous) => {
+      return {
+        ...previous,
+        categoryParams: {
+          ...previous.categoryParams,
+          [categoryId]: sanitizedValue,
+        },
+      }
+    })
+  }
+
+  const handleAddCustomCategory = () => {
+    const newKey = generateCustomCategoryKey()
     setFormState((previous) => ({
       ...previous,
+      customCategories: [
+        ...previous.customCategories,
+        {
+          key: newKey,
+          label: '',
+          description: '',
+          sourceCategoryId: null,
+        },
+      ],
+      categories: {
+        ...previous.categories,
+        [newKey]: true,
+      },
       categoryParams: {
         ...previous.categoryParams,
-        [categoryId]: sanitizedValue,
+        [newKey]: '',
       },
+    }))
+    setCategoryPersistState((previous) => ({
+      ...previous,
+      [newKey]: { status: 'idle' },
     }))
   }
 
-  const handleAddOverride = (categoryId: string) => {
+  const handleRemoveCustomCategory = (categoryKey: string) => {
     setFormState((previous) => {
-      const overrides = previous.categoryOverrides[categoryId] ?? []
-      const baseParam = previous.categoryParams[categoryId] ?? categoryId
-      const nextOverrides = [...overrides, { id: baseParam, apiName: '', writeAs: '' }]
+      const nextCustomCategories = previous.customCategories.filter((category) => category.key !== categoryKey)
+      const nextCategories = { ...previous.categories }
+      const nextCategoryParams = { ...previous.categoryParams }
+
+      delete nextCategories[categoryKey]
+      delete nextCategoryParams[categoryKey]
+
       return {
         ...previous,
-        categoryOverrides: {
-          ...previous.categoryOverrides,
-          [categoryId]: nextOverrides,
-        },
+        customCategories: nextCustomCategories,
+        categories: nextCategories,
+        categoryParams: nextCategoryParams,
       }
+    })
+    setCategoryPersistState((previous) => {
+      const next = { ...previous }
+      delete next[categoryKey]
+      return next
     })
   }
 
-  const handleOverrideChange = (
-    categoryId: string,
-    index: number,
-    field: keyof CategoryOverride,
-    value: string,
-  ) => {
+  const handleCustomCategoryLabelChange = (categoryKey: string, value: string) => {
     setFormState((previous) => {
-      const overrides = previous.categoryOverrides[categoryId] ?? []
-      const sanitizedValue = field === 'id' ? value.replace(/\s+/g, '') : value
-      const nextOverrides = overrides.map((override, overrideIndex) =>
-        overrideIndex === index ? { ...override, [field]: sanitizedValue } : override,
+      const nextCategories = previous.customCategories.map((category) =>
+        category.key === categoryKey ? { ...category, label: value } : category,
       )
+
+      const currentParam = previous.categoryParams[categoryKey] ?? ''
+      const trimmedParam = currentParam.trim()
+      const nextParam =
+        trimmedParam.length > 0 ? trimmedParam : value.trim().length > 0 ? sanitizeCategoryParam(value) : ''
+
       return {
         ...previous,
-        categoryOverrides: {
-          ...previous.categoryOverrides,
-          [categoryId]: nextOverrides,
+        customCategories: nextCategories,
+        categoryParams: {
+          ...previous.categoryParams,
+          [categoryKey]: nextParam,
         },
       }
+    })
+
+    const trimmed = value.trim().toLowerCase()
+    setCategoryPersistState((previous) => {
+      const current = previous[categoryKey]
+      if (!current || current.status === 'saving') {
+        return previous
+      }
+
+      if (!trimmed) {
+        return {
+          ...previous,
+          [categoryKey]: { status: 'idle' },
+        }
+      }
+
+      if (current.lastSavedName && current.lastSavedName !== trimmed) {
+        return {
+          ...previous,
+          [categoryKey]: { status: 'idle' },
+        }
+      }
+
+      return previous
     })
   }
 
-  const handleOverrideRemove = (categoryId: string, index: number) => {
+  const handleCustomCategoryLabelBlur = (categoryKey: string, event: FocusEvent<HTMLInputElement>) => {
+    const value = event.target.value
+    void persistServiceCategory(categoryKey, value)
+  }
+
+  const handleCustomCategoryTemplateChange = (categoryKey: string, templateId: string) => {
+    const template = gomechanicCategories.find((category) => category.id === templateId)
+
     setFormState((previous) => {
-      const overrides = previous.categoryOverrides[categoryId] ?? []
-      const nextOverrides = overrides.filter((_, overrideIndex) => overrideIndex !== index)
+      const nextCustomCategories = previous.customCategories.map((category) => {
+        if (category.key !== categoryKey) {
+          return category
+        }
+
+        if (!templateId) {
+          return {
+            ...category,
+            sourceCategoryId: null,
+          }
+        }
+
+        return {
+          ...category,
+          sourceCategoryId: templateId,
+          label: template?.label ?? category.label,
+          description: template?.description,
+        }
+      })
+
+      const nextCategoryParams = {
+        ...previous.categoryParams,
+      }
+
+      if (template) {
+        nextCategoryParams[categoryKey] = template.id
+      } else if (!(categoryKey in nextCategoryParams)) {
+        nextCategoryParams[categoryKey] = ''
+      }
+
       return {
         ...previous,
-        categoryOverrides: {
-          ...previous.categoryOverrides,
-          [categoryId]: nextOverrides,
+        customCategories: nextCustomCategories,
+        categoryParams: nextCategoryParams,
+        categories: {
+          ...previous.categories,
+          [categoryKey]: true,
         },
       }
     })
+
+    if (template?.label) {
+      void persistServiceCategory(categoryKey, template.label)
+    } else {
+      setCategoryPersistState((previous) => ({
+        ...previous,
+        [categoryKey]: { status: 'idle' },
+      }))
+    }
+  }
+
+  const ensureSelectedCategoriesPersisted = async () => {
+    for (const category of activeCategories) {
+      if (!formState.categories[category.key]) {
+        continue
+      }
+
+      const name = category.label.trim()
+      if (!name) {
+        return { success: false as const, message: 'Provide a name for each selected category before running the seed.' }
+      }
+
+      const result = await persistServiceCategory(category.key, name)
+      if (!result.success) {
+        return {
+          success: false as const,
+          message: result.message ?? 'Failed to save service categories.',
+        }
+      }
+    }
+
+    return { success: true as const }
   }
 
   const handleOperationToggle = (operationId: string) => {
@@ -235,6 +475,21 @@ const GomechanicPanel: FC = () => {
       return
     }
 
+    const requiresCategories = selectedOperations.includes('seed-services-data')
+    if (requiresCategories && selectedCategoryParams.length === 0) {
+      setFeedback('Add at least one service category when running the service data seed.')
+      return
+    }
+
+    const hasPendingCustomCategoryId = activeCategories.some(
+      (category) => formState.categories[category.key] && !formState.categoryParams[category.key]?.trim(),
+    )
+
+    if (hasPendingCustomCategoryId) {
+      setFeedback('Provide a query ID for every custom category before running the seed.')
+      return
+    }
+
     setFeedback(null)
     setIsConfirmOpen(true)
   }
@@ -254,6 +509,30 @@ const GomechanicPanel: FC = () => {
       return
     }
 
+    const requiresCategories = selectedOperations.includes('seed-services-data')
+    if (requiresCategories && selectedCategoryParams.length === 0) {
+      setIsConfirmOpen(false)
+      setFeedback('Add at least one service category when running the service data seed.')
+      return
+    }
+
+    const hasPendingCustomCategoryId = activeCategories.some(
+      (category) => formState.categories[category.key] && !formState.categoryParams[category.key]?.trim(),
+    )
+
+    if (hasPendingCustomCategoryId) {
+      setIsConfirmOpen(false)
+      setFeedback('Provide a query ID for every custom category before running the seed.')
+      return
+    }
+
+    const persistenceResult = await ensureSelectedCategoriesPersisted()
+
+    if (!persistenceResult.success) {
+      setFeedback(persistenceResult.message)
+      return
+    }
+
     setIsConfirmOpen(false)
     setStatus('submitting')
     setFeedback(null)
@@ -267,24 +546,27 @@ const GomechanicPanel: FC = () => {
     appendLog('Queued seed request. Preparing environment variables…')
     appendLog('Dispatching seed worker request to API route…')
 
-    const categoryConfig = gomechanicCategories
-      .filter((category) => formState.categories[category.id])
-      .map((category) => {
-        const queryId = formState.categoryParams[category.id]?.trim() || category.id
-        const overridesRaw = formState.categoryOverrides[category.id] ?? []
-        const overrides = overridesRaw
-          .map((override) => ({
-            id: (override.id || queryId).trim(),
-            apiName: override.apiName?.trim() || undefined,
-            writeAs: override.writeAs?.trim() || undefined,
-          }))
-          .filter((override) => override.id || override.apiName || override.writeAs)
-        return {
+    const categoryConfig = activeCategories.flatMap((category) => {
+      if (!formState.categories[category.key]) {
+        return []
+      }
+
+      const rawQueryId = formState.categoryParams[category.key]
+      const queryId = rawQueryId?.trim() || ''
+
+      if (!queryId) {
+        return []
+      }
+
+      const label = category.label?.trim() || queryId
+
+      return [
+        {
           id: queryId,
-          label: category.label,
-          overrides,
-        }
-      })
+          label,
+        },
+      ]
+    })
 
     const payload = {
       mongodbUri: trimmedUri,
@@ -297,14 +579,6 @@ const GomechanicPanel: FC = () => {
       dryRun: formState.dryRun,
     }
 
-    const normaliseLogs = (raw: unknown): string[] => {
-      const entries = Array.isArray(raw) ? raw : raw ? [raw] : []
-      return entries
-        .flatMap((entry) => String(entry).split(/\r?\n/))
-        .map((line) => line.trim())
-        .filter(Boolean)
-    }
-
     try {
       const response = await fetch('/api/seed/gomechanic', {
         method: 'POST',
@@ -313,46 +587,113 @@ const GomechanicPanel: FC = () => {
         },
         body: JSON.stringify(payload),
       })
+      const contentType = response.headers.get('Content-Type') || ''
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        const serverLogs = normaliseLogs(data.logs)
-        const message = typeof data.error === 'string' ? data.error : 'Seed request failed.'
-        const error = new Error(message) as Error & { logs?: string[] }
-        error.logs = serverLogs
-        throw error
+      if (!response.ok && !contentType.includes('text/event-stream')) {
+        const errorPayload = await response.json().catch(() => null)
+        const message =
+          typeof errorPayload?.error === 'string'
+            ? errorPayload.error
+            : 'Seed request failed.'
+        throw new Error(message)
       }
 
-      const normalizedLogs = normaliseLogs(data.logs)
-
-      if (normalizedLogs.length) {
-        setLogEntries((previous) => [
-          ...previous,
-          ...normalizedLogs.map((line) => `${formatTimestamp()}  ${line}`),
-        ])
+      if (!contentType.includes('text/event-stream')) {
+        throw new Error('Seed worker did not return a streaming response.')
       }
 
-      appendLog('GoMechanic seed completed successfully.')
+      const body = response.body
 
-      setStatus('success')
-      const overridePhrase =
-        totalOverrides > 0
-          ? ` and ${totalOverrides} custom mapping${totalOverrides === 1 ? '' : 's'}`
-          : ''
+      if (!body) {
+        throw new Error('Seed worker returned an empty response body.')
+      }
+
+      const reader = body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let completed = false
+      let failedMessage: string | null = null
+
       const selectedCategoryCount = selectedCategoryParams.length
-      setFeedback(
-        `Seed request prepared with ${selectedOperations.length} operation(s) targeting ${selectedCategoryCount} category id value(s)${overridePhrase}. Connect this form to the admin API to invoke scripts/seed_gomechanic_data.py with the provided payload.`,
-      )
+
+      const handleStatusComplete = () => {
+        if (completed || failedMessage) {
+          return
+        }
+        appendLog('GoMechanic seed completed successfully.')
+        setStatus('success')
+        setFeedback(
+          `Seed request prepared with ${selectedOperations.length} operation(s) targeting ${selectedCategoryCount} category id value(s). Connect this form to the admin API to invoke scripts/seed_gomechanic_data.py with the provided payload.`,
+        )
+        completed = true
+      }
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const events = buffer.split('\n\n')
+        buffer = events.pop() ?? ''
+
+        for (const event of events) {
+          const lines = event.trim().split('\n')
+          const dataLine = lines.find((line) => line.startsWith('data:'))
+          if (!dataLine) {
+            continue
+          }
+
+          const rawPayload = dataLine.slice(5).trim()
+          if (!rawPayload) {
+            continue
+          }
+
+          let parsed: { type?: string; message?: unknown; state?: string; exitCode?: number } | null = null
+          try {
+            parsed = JSON.parse(rawPayload)
+          } catch {
+            appendLog(`Received malformed stream payload: ${rawPayload}`)
+            continue
+          }
+
+          if (!parsed) {
+            continue
+          }
+
+          if (parsed.type === 'log' && typeof parsed.message === 'string') {
+            appendLog(parsed.message)
+          }
+
+          if (parsed.type === 'error' && typeof parsed.message === 'string') {
+            failedMessage = parsed.message
+            appendLog(`ERROR: ${parsed.message}`)
+            setStatus('idle')
+            setFeedback(`Failed to run GoMechanic seed: ${parsed.message}`)
+          }
+
+          if (parsed.type === 'status') {
+            if (parsed.state === 'started') {
+              appendLog('Seed worker started…')
+            } else if (parsed.state === 'completed') {
+              handleStatusComplete()
+            } else if (parsed.state === 'failed') {
+              const failure = typeof parsed.message === 'string' ? parsed.message : 'Seed request failed.'
+              failedMessage = failure
+              appendLog(`ERROR: ${failure}`)
+              setStatus('idle')
+              setFeedback(`Failed to run GoMechanic seed: ${failure}`)
+            }
+          }
+        }
+      }
+
+      if (!completed && !failedMessage) {
+        handleStatusComplete()
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to run GoMechanic seed.'
-      const logsFromError = (error as { logs?: string[] }).logs ?? []
-      if (logsFromError.length) {
-        setLogEntries((previous) => [
-          ...previous,
-          ...logsFromError.map((line) => `${formatTimestamp()}  ${line}`),
-        ])
-      }
       appendLog(`ERROR: ${message}`)
       setStatus('idle')
       setFeedback(`Failed to run GoMechanic seed: ${message}`)
@@ -366,6 +707,7 @@ const GomechanicPanel: FC = () => {
     setLogEntries([])
     setIsConsoleOpen(false)
     setIsConfirmOpen(false)
+    setCategoryPersistState({})
   }
 
   const isSubmitting = status === 'submitting'
@@ -522,18 +864,37 @@ const GomechanicPanel: FC = () => {
           </fieldset>
 
           <fieldset className="space-y-6">
-            <legend className="text-xs font-semibold uppercase tracking-[0.28em] text-brand-600">
-              Service categories
+            <legend className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.28em] text-brand-600">
+              <span>Service categories</span>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault()
+                  handleAddCustomCategory()
+                }}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-600 transition hover:border-brand-300 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <FiPlus className="h-3.5 w-3.5" />
+                Add category
+              </button>
             </legend>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {gomechanicCategories.map((category) => {
-                const isChecked = formState.categories[category.id]
-                const overrides = formState.categoryOverrides[category.id] ?? []
-                const categoryParamValue = formState.categoryParams[category.id] ?? category.id
+              {activeCategories.map((category) => {
+                const categoryKey = category.key
+                const isChecked = Boolean(formState.categories[categoryKey])
+                const categoryParamValue = formState.categoryParams[categoryKey] ?? ''
+                const labelValue = category.label
+                const displayLabel = labelValue.trim() || 'Custom category'
+                const templateCategory = category.sourceCategoryId
+                  ? gomechanicCategories.find((template) => template.id === category.sourceCategoryId)
+                  : null
+                const persistenceMeta = categoryPersistState[categoryKey]
+
                 return (
                   <label
-                    key={category.id}
+                    key={categoryKey}
                     className={`block cursor-pointer rounded-2xl border px-4 py-4 transition ${
                       isChecked
                         ? 'border-brand-200 bg-brand-50/70 text-brand-800 shadow-sm'
@@ -543,110 +904,123 @@ const GomechanicPanel: FC = () => {
                     <span className="flex items-start gap-3">
                       <input
                         type="checkbox"
-                        name={`category-${category.id}`}
+                        name={`category-${categoryKey}`}
                         checked={isChecked}
-                        onChange={() => handleCategoryToggle(category.id)}
+                        onChange={() => handleCategoryToggle(categoryKey)}
                         disabled={isSubmitting}
                         className="mt-1 h-4 w-4 rounded border-brand-300 text-brand-600 focus:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-70"
                       />
-                      <span>
-                        <span className="text-sm font-semibold">{category.label}</span>
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-brand-600">
-                          <span className="flex items-center gap-2 rounded-lg bg-white px-2 py-1 shadow-sm ring-1 ring-brand-100/60">
-                            <span className="font-semibold uppercase tracking-wide">Query ID</span>
+                      <span className="flex-1 space-y-2">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <input
                               type="text"
-                              value={categoryParamValue}
-                              onChange={(event) => handleCategoryParamChange(category.id, event.target.value)}
+                              value={labelValue}
+                              placeholder="Service category name"
+                              onChange={(event) =>
+                                handleCustomCategoryLabelChange(categoryKey, event.target.value)
+                              }
+                              onBlur={(event) => handleCustomCategoryLabelBlur(categoryKey, event)}
                               onMouseDown={(event) => event.stopPropagation()}
                               onClick={(event) => event.stopPropagation()}
                               onFocus={(event) => event.stopPropagation()}
                               disabled={isSubmitting}
-                              aria-label={`Query ID used to fetch ${category.label}`}
-                              className="w-20 rounded-md border border-brand-100/70 bg-brand-50/30 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-700 focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
+                              aria-label="Service category name"
+                              className="min-w-[10rem] flex-1 rounded-xl border border-brand-100/70 bg-brand-50/20 px-3 py-2 text-sm font-semibold text-brand-800 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-70"
+                            />
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                handleRemoveCustomCategory(categoryKey)
+                              }}
+                              disabled={isSubmitting}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-brand-200 text-brand-500 transition hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              aria-label={`Remove ${displayLabel}`}
+                            >
+                              <FiTrash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-brand-600">
+                            <span className="flex items-center gap-2 rounded-lg bg-white px-2 py-1 shadow-sm ring-1 ring-brand-100/60">
+                              <span className="font-semibold uppercase tracking-wide">Template</span>
+                              <select
+                                value={category.sourceCategoryId ?? ''}
+                                onChange={(event) =>
+                                  handleCustomCategoryTemplateChange(categoryKey, event.target.value)
+                                }
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onClick={(event) => event.stopPropagation()}
+                                onFocus={(event) => event.stopPropagation()}
+                                disabled={isSubmitting}
+                                aria-label="Choose existing category template"
+                                className="rounded-md border border-brand-100/70 bg-brand-50/20 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-700 focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                <option value="">Custom name</option>
+                                {gomechanicCategories.map((template) => (
+                                  <option key={`${categoryKey}-template-${template.id}`} value={template.id}>
+                                    {template.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </span>
+                            {templateCategory && (
+                              <span className="text-[11px] text-muted-500">
+                                Based on {templateCategory.label} template
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-brand-600">
+                          <span className="flex items-center gap-2 rounded-lg bg-white px-2 py-1 shadow-sm ring-1 ring-brand-100/60">
+                            <span className="font-semibold uppercase tracking-wide">Category ID</span>
+                            <input
+                              type="text"
+                              value={categoryParamValue}
+                              placeholder="Auto-generated"
+                              onChange={(event) => handleCategoryParamChange(categoryKey, event.target.value)}
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
+                              onFocus={(event) => event.stopPropagation()}
+                              disabled={isSubmitting}
+                              aria-label={`Category ID used to fetch ${displayLabel}`}
+                              className="w-24 rounded-md border border-brand-100/70 bg-brand-50/30 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand-700 focus:border-brand-300 focus:outline-none focus:ring-1 focus:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-60"
                             />
                           </span>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.preventDefault()
-                              handleAddOverride(category.id)
-                            }}
-                            disabled={isSubmitting}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-brand-200 bg-brand-50 text-brand-600 transition hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            aria-label={`Add category mapping for ${category.label}`}
-                          >
-                            <FiPlus className="h-3.5 w-3.5" />
-                          </button>
                         </div>
-                        {category.description && (
-                          <p className="mt-1 text-xs text-muted-500">{category.description}</p>
+                        {(category.description || templateCategory?.description) && (
+                          <p className="mt-1 text-xs text-muted-500">
+                            {category.description || templateCategory?.description}
+                          </p>
                         )}
-                        {overrides.length > 0 && (
-                          <div className="mt-3 space-y-3 rounded-2xl bg-white/90 p-3 text-muted-700 shadow-sm ring-1 ring-brand-100/60">
-                            {overrides.map((override, index) => (
-                              <div key={`${category.id}-override-${index}`} className="space-y-2">
-                                <div className="grid gap-3 md:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                                  <input
-                                    type="text"
-                                    placeholder="Category ID"
-                                    value={override.id}
-                                    onChange={(event) =>
-                                      handleOverrideChange(category.id, index, 'id', event.target.value)
-                                    }
-                                    disabled={isSubmitting}
-                                    className="rounded-xl border border-brand-100/70 bg-brand-50/20 px-3 py-2 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="API category name"
-                                    value={override.apiName}
-                                    onChange={(event) =>
-                                      handleOverrideChange(category.id, index, 'apiName', event.target.value)
-                                    }
-                                    disabled={isSubmitting}
-                                    className="rounded-xl border border-brand-100/70 bg-brand-50/20 px-3 py-2 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
-                                  />
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      placeholder="Write as"
-                                      value={override.writeAs}
-                                      onChange={(event) =>
-                                        handleOverrideChange(category.id, index, 'writeAs', event.target.value)
-                                      }
-                                      disabled={isSubmitting}
-                                      className="w-full rounded-xl border border-brand-100/70 bg-brand-50/20 px-3 py-2 text-xs focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-60"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.preventDefault()
-                                        handleOverrideRemove(category.id, index)
-                                      }}
-                                      disabled={isSubmitting}
-                                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-brand-200 text-brand-500 transition hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                      aria-label={`Remove mapping ${index + 1} for ${category.label}`}
-                                    >
-                                      <FiTrash2 className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
+                        {persistenceMeta?.status === 'saving' && (
+                          <p className="text-[11px] font-medium text-brand-600">Saving category…</p>
+                        )}
+                        {persistenceMeta?.status === 'error' && persistenceMeta.message && (
+                          <p className="text-[11px] font-medium text-red-500">{persistenceMeta.message}</p>
+                        )}
+                        {persistenceMeta?.status === 'saved' && !persistenceMeta.message && (
+                          <p className="text-[11px] text-emerald-600">Category synced to database.</p>
+                        )}
+                        {persistenceMeta?.status === 'saved' && persistenceMeta.message && (
+                          <p className="text-[11px] text-amber-600">{persistenceMeta.message}</p>
                         )}
                       </span>
                     </span>
                   </label>
                 )
               })}
+              {!activeCategories.length && (
+                <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/60 p-6 text-sm text-muted-500">
+                  No categories configured.
+                </div>
+              )}
             </div>
 
             <p className="text-xs text-muted-500">
               {selectedCategoryParams.length} category id value{selectedCategoryParams.length === 1 ? '' : 's'} queued for
-              the CLI invocation. {totalOverrides > 0 &&
-                `${totalOverrides} custom mapping${totalOverrides === 1 ? '' : 's'} configured.`}
+              the CLI invocation.
             </p>
           </fieldset>
 

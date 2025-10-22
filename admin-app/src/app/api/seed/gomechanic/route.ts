@@ -81,41 +81,76 @@ export async function POST(request: Request) {
     delete env.GOMECHANIC_CITY_ID
   }
 
-  const logs: string[] = []
+  const encoder = new TextEncoder()
+  const { readable, writable } = new TransformStream<Uint8Array>()
+  const writer = writable.getWriter()
 
-  try {
+  const sendEvent = async (data: Record<string, unknown>) => {
+    const payload = `data: ${JSON.stringify(data)}\n\n`
+    await writer.write(encoder.encode(payload))
+  }
+
+  const streamPromise = new Promise<void>((resolve) => {
     const child = spawn(pythonBinary, args, {
       cwd: projectRoot,
       env,
     })
 
+    const handleChunk = async (buffer: Buffer, source: 'stdout' | 'stderr') => {
+      const text = buffer.toString()
+      const lines = text.split(/\r?\n/)
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue
+        }
+        await sendEvent({ type: 'log', source, message: line })
+      }
+    }
+
     child.stdout.on('data', (chunk) => {
-      logs.push(chunk.toString())
+      void handleChunk(chunk, 'stdout').catch(() => {})
     })
 
     child.stderr.on('data', (chunk) => {
-      logs.push(chunk.toString())
+      void handleChunk(chunk, 'stderr').catch(() => {})
     })
 
-    const exitCode: number = await new Promise((resolve, reject) => {
-      child.on('error', (error) => reject(error))
-      child.on('close', (code) => resolve(code ?? 0))
+    child.on('error', async (error) => {
+      await sendEvent({ type: 'error', message: error.message })
+      await writer.close()
+      resolve()
     })
 
-    if (exitCode !== 0) {
-      return NextResponse.json(
-        {
-          error: `GoMechanic seed script exited with code ${exitCode}.`,
-          logs,
-        },
-        { status: 500 },
-      )
-    }
+    child.on('close', async (code) => {
+      if (code === 0) {
+        await sendEvent({ type: 'status', state: 'completed', exitCode: 0 })
+      } else {
+        await sendEvent({ type: 'status', state: 'failed', exitCode: code, message: `GoMechanic seed script exited with code ${code}.` })
+      }
+      await writer.close()
+      resolve()
+    })
 
-    return NextResponse.json({ success: true, logs })
-  } catch (error) {
+    void sendEvent({ type: 'status', state: 'started' })
+  })
+
+  const response = new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    },
+  })
+
+  streamPromise.catch(async (error) => {
     const message = error instanceof Error ? error.message : 'Failed to execute GoMechanic seed script.'
-    logs.push(message)
-    return NextResponse.json({ error: message, logs }, { status: 500 })
-  }
+    try {
+      await sendEvent({ type: 'error', message })
+    } catch {}
+    try {
+      await writer.close()
+    } catch {}
+  })
+
+  return response
 }

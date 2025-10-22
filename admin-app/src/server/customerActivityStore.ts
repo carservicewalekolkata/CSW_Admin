@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 
-export const MOCK_OTP_CODE = '1234'
+import { consumeLoginOtpVerification, OtpError } from '@/server/otp/service'
 
 export type CustomerActivityVehicle = {
   brandSlug: string
@@ -98,6 +98,7 @@ const createActivityEntry = (
 export type RecordCustomerActivityInput = {
   sessionToken?: string | null
   phone?: string | null
+  otpRequestId?: string | null
   vehicle: CustomerActivityVehicle
 }
 
@@ -117,6 +118,7 @@ export class CustomerActivityError extends Error {
 export const recordCustomerActivity = async ({
   sessionToken,
   phone,
+  otpRequestId,
   vehicle,
 }: RecordCustomerActivityInput): Promise<RecordCustomerActivityResult> => {
   if (!vehicle || !vehicle.brandSlug || !vehicle.modelSlug || !vehicle.fuelType) {
@@ -137,6 +139,20 @@ export const recordCustomerActivity = async ({
     if (!trimmedPhone) {
       throw new CustomerActivityError('Phone number is required to create a session', 400)
     }
+
+    if (!otpRequestId) {
+      throw new CustomerActivityError('OTP verification is required to continue this session', 412)
+    }
+
+    try {
+      await consumeLoginOtpVerification({ requestId: otpRequestId, phone: trimmedPhone })
+    } catch (error) {
+      if (error instanceof OtpError) {
+        throw new CustomerActivityError(error.message, error.status)
+      }
+      throw new CustomerActivityError('Unable to confirm OTP verification.', 500)
+    }
+
     session = createSessionRecord(trimmedPhone)
     store.sessions.push(session)
   }

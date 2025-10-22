@@ -1,7 +1,7 @@
 import { versionedJson } from '@/server/apiVersion'
 import { applyCors, corsPreflight } from '@/server/cors'
 import { connectToDatabase } from '@/lib/db'
-import { getServiceCategoryModel } from '@/models'
+import { getServiceCategoryModel, getServiceModel } from '@/models'
 import type { ServiceCategory } from '@/types/serviceCategories'
 
 type RawServiceCategory = {
@@ -279,9 +279,28 @@ export const DELETE = async (request: Request) => {
     }
 
     const ServiceCategory = getServiceCategoryModel(connection)
-    const deleted = await ServiceCategory.findOneAndDelete({ id })
+    const Service = getServiceModel(connection)
 
-    if (!deleted) {
+    const session = await connection.startSession()
+    let categoryDeleted = false
+
+    try {
+      await session.withTransaction(async () => {
+        const deletedCategory = await ServiceCategory.findOneAndDelete({ id }).session(session)
+
+        if (!deletedCategory) {
+          return
+        }
+
+        categoryDeleted = true
+
+        await Service.deleteMany({ category_id: id }).session(session)
+      })
+    } finally {
+      void session.endSession()
+    }
+
+    if (!categoryDeleted) {
       return versionedJson(
         { success: false, message: 'Service category not found' },
         { status: 404 },

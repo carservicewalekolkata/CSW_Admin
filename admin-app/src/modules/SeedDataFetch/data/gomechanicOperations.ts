@@ -1,5 +1,5 @@
 export interface GomechanicOperation {
-  id: 'seed-brands-data' | 'seed-models-data' | 'seed-services-categories' | 'seed-services-data'
+  id: 'seed-brands-data' | 'seed-models-data' | 'seed-services-data'
   label: string
   description: string
 }
@@ -15,11 +15,6 @@ export const gomechanicOperations: GomechanicOperation[] = [
     label: 'Seed models data',
     description:
       'Iterate each brand to sync models, hero images, and GridFS thumbnails while linking to brand IDs.',
-  },
-  {
-    id: 'seed-services-categories',
-    label: 'Seed service categories',
-    description: 'Ensure service categories exist or create them with sequential counters during model ingestion.',
   },
   {
     id: 'seed-services-data',
