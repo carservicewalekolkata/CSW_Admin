@@ -140,17 +140,15 @@ export const recordCustomerActivity = async ({
       throw new CustomerActivityError('Phone number is required to create a session', 400)
     }
 
-    if (!otpRequestId) {
-      throw new CustomerActivityError('OTP verification is required to continue this session', 412)
-    }
-
-    try {
-      await consumeLoginOtpVerification({ requestId: otpRequestId, phone: trimmedPhone })
-    } catch (error) {
-      if (error instanceof OtpError) {
-        throw new CustomerActivityError(error.message, error.status)
+    if (otpRequestId) {
+      try {
+        await consumeLoginOtpVerification({ requestId: otpRequestId, phone: trimmedPhone })
+      } catch (error) {
+        if (error instanceof OtpError) {
+          throw new CustomerActivityError(error.message, error.status)
+        }
+        throw new CustomerActivityError('Unable to confirm OTP verification.', 500)
       }
-      throw new CustomerActivityError('Unable to confirm OTP verification.', 500)
     }
 
     session = createSessionRecord(trimmedPhone)

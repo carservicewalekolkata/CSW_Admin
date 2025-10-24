@@ -9,16 +9,14 @@ type SendOtpMessageOptions = {
 
 const DEFAULT_BASE_URL = process.env.MYSMSHOP_API_BASE_URL?.trim()?.length
   ? process.env.MYSMSHOP_API_BASE_URL.trim()
-  : 'https://sms.mysmsshop.in/V2/http-groupsms-api.php'
+  : 'https://sms.mysmsshop.in/V2/http-api.php'
 
 const insecureMySmsAgent = new Agent({ connect: { rejectUnauthorized: false } })
 const API_KEY = process.env.MYSMSHOP_API_KEY?.trim() || ''
 const SENDER_ID = process.env.MYSMSHOP_SENDER_ID?.trim() || ''
-const CAMPAIGN_NAME = process.env.MYSMSHOP_CAMPAIGN_NAME?.trim() || ''
 const TEMPLATE_ID = process.env.MYSMSHOP_TEMPLATE_ID?.trim() || ''
 const HEADER_ID = process.env.MYSMSHOP_HEADER_ID?.trim() || ''
 const ENTITY_ID = process.env.MYSMSHOP_ENTITY_ID?.trim() || ''
-const GROUP_TEMPLATE = process.env.MYSMSHOP_GROUP_NAME_TEMPLATE?.trim() || '{{phone}}'
 const DEFAULT_COUNTRY_PREFIX = process.env.MYSMSHOP_COUNTRY_PREFIX?.trim() || '91'
 const DEFAULT_MESSAGE_TEMPLATE =
   process.env.MYSMSHOP_LOGIN_TEMPLATE?.trim() ||
@@ -38,9 +36,6 @@ const encodePhone = (phone: string) => {
 const buildMessage = (otp: string, validityMinutes: number) =>
   DEFAULT_MESSAGE_TEMPLATE.replace('{OTP}', otp).replace('{MINUTES}', `${validityMinutes}`)
 
-const buildGroupName = (encodedPhone: string) =>
-  GROUP_TEMPLATE.replace(/\{\{phone\}\}/gi, encodedPhone)
-
 export const sendOtpMessage = async ({ phone, otp, validityMinutes }: SendOtpMessageOptions) => {
   if (!API_KEY || !SENDER_ID) {
     console.warn(
@@ -51,6 +46,18 @@ export const sendOtpMessage = async ({ phone, otp, validityMinutes }: SendOtpMes
     return
   }
 
+  const missingConfig: string[] = []
+  if (!TEMPLATE_ID) missingConfig.push('MYSMSHOP_TEMPLATE_ID')
+  if (!HEADER_ID) missingConfig.push('MYSMSHOP_HEADER_ID')
+  if (!ENTITY_ID) missingConfig.push('MYSMSHOP_ENTITY_ID')
+
+  if (missingConfig.length > 0) {
+    console.warn(
+      '[sms] MySMSshop configuration missing optional parameters. Provider may reject OTP delivery.',
+      { missing: missingConfig },
+    )
+  }
+
   const encodedPhone = encodePhone(phone)
   const message = buildMessage(otp, validityMinutes)
 
@@ -58,10 +65,8 @@ export const sendOtpMessage = async ({ phone, otp, validityMinutes }: SendOtpMes
   params.set('apikey', API_KEY)
   params.set('senderid', SENDER_ID)
   params.set('message', message)
-  params.set('groupname', buildGroupName(encodedPhone))
+  params.set('number', encodedPhone)
   params.set('format', 'json')
-
-  if (CAMPAIGN_NAME) params.set('campaign_name', CAMPAIGN_NAME)
   if (TEMPLATE_ID) {
     params.set('template_id', TEMPLATE_ID)
     params.set('templateid', TEMPLATE_ID)
@@ -94,9 +99,20 @@ export const sendOtpMessage = async ({ phone, otp, validityMinutes }: SendOtpMes
   try {
     const parsed = JSON.parse(responseText)
     const status = parsed.status ?? parsed.Status ?? parsed.statuscode ?? parsed.statusCode
-    if (status && String(status).toLowerCase() !== 'success' && Number(status) !== 200) {
+    if (
+      status &&
+      String(status).toLowerCase() !== 'success' &&
+      String(status).toLowerCase() !== 'ok' &&
+      Number(status) !== 200
+    ) {
       throw new Error(`MySMSshop responded with status ${status}: ${responseText}`)
     }
+    console.info('[sms] MySMSshop accepted OTP request.', {
+      phone: encodedPhone,
+      status: status ?? response.status,
+      messageId: parsed.data?.[0]?.id ?? parsed.id ?? null,
+      providerMessage: parsed.message ?? null,
+    })
   } catch (error) {
     // If parsing fails, log and proceed—provider may return plain text.
     if (error instanceof Error) {

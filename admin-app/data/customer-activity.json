@@ -1,6 +1,28 @@
 {
   "sessions": [
     {
+      "token": "bc9628b9-b6d0-4f3f-8ad1-3f29fe4ee2b7",
+      "phone": "8398239283",
+      "createdAt": "2025-10-24T22:43:25.664Z",
+      "updatedAt": "2025-10-24T22:43:25.665Z",
+      "entries": [
+        {
+          "id": "c3bf19fa-3fa8-41b7-9a01-a4b66679e8b8",
+          "sessionToken": "bc9628b9-b6d0-4f3f-8ad1-3f29fe4ee2b7",
+          "phone": "8398239283",
+          "vehicle": {
+            "brandSlug": "datsun",
+            "brandName": "Datsun",
+            "modelSlug": "go",
+            "modelName": "GO",
+            "fuelType": "Petrol"
+          },
+          "vehicleSummary": "Petrol Datsun GO",
+          "createdAt": "2025-10-24T22:43:25.665Z"
+        }
+      ]
+    },
+    {
       "token": "1f9ca4ce-3604-4135-8530-3754c1a1702f",
       "phone": "9785574848",
       "createdAt": "2025-10-16T00:11:10.800Z",

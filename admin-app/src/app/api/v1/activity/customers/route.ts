@@ -65,14 +65,6 @@ export async function POST(request: Request) {
       return applyCors(request, response)
     }
 
-    if (!otpRequestId) {
-      const response = NextResponse.json(
-        { message: 'OTP verification reference is missing. Please try again.' },
-        { status: 400 },
-      )
-      return applyCors(request, response)
-    }
-
     const { session, entry } = await recordCustomerActivity({
       phone,
       otpRequestId,
