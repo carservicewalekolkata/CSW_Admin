@@ -1,8 +1,12 @@
 import type { BrandSortUpdated } from './brands'
 
+export type ServiceCategoryType = 'basic' | 'custom'
+
 export interface ServiceCategory {
   id: number
   name: string
+  description: string | null
+  type: ServiceCategoryType
   created_date: string | null
   updated_date: string | null
 }
@@ -27,11 +31,15 @@ export type ServiceCategoryResponse = {
 
 export type CreateServiceCategoryRequest = {
   name: string
+  description?: string | null
+  type: ServiceCategoryType
 }
 
 export type UpdateServiceCategoryRequest = {
   id: number
   name: string
+  description?: string | null
+  type: ServiceCategoryType
 }
 
 export type ServiceCategoryMutationResponse = {

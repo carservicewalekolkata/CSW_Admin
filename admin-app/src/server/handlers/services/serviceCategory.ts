@@ -7,6 +7,8 @@ import type { ServiceCategory } from '@/types/serviceCategories'
 type RawServiceCategory = {
   id: number
   name: string
+  type?: string | null
+  description?: string | null
   created_date?: Date | string
   updated_date?: Date | string
 }
@@ -76,12 +78,29 @@ export const GET = async (request: Request) => {
 
     const skip = (page - 1) * limit
 
+    await ServiceCategory.updateMany(
+      { type: { $exists: true, $regex: /^custom$/i } },
+      { $set: { type: 'custom' } },
+    )
+
+    await ServiceCategory.updateMany(
+      {
+        $or: [
+          { type: { $exists: false } },
+          { type: null },
+          { type: '' },
+          { type: { $regex: /^(?!custom$|basic$)/i } },
+        ],
+      },
+      { $set: { type: 'basic' } },
+    )
+
     const [results, total] = await Promise.all([
       ServiceCategory.find(filters)
         .sort(sort)
         .skip(skip)
         .limit(limit)
-        .select(['id', 'name', 'created_date', 'updated_date'])
+        .select(['id', 'name', 'description', 'type', 'created_date', 'updated_date'])
         .lean<RawServiceCategory[]>(),
       ServiceCategory.countDocuments(filters),
     ])
@@ -89,6 +108,11 @@ export const GET = async (request: Request) => {
     const data: ServiceCategory[] = results.map((item) => ({
       id: item.id,
       name: item.name,
+      description:
+        typeof item.description === 'string' && item.description.trim().length > 0
+          ? item.description.trim()
+          : null,
+      type: typeof item.type === 'string' && item.type.trim().toLowerCase() === 'custom' ? 'custom' : 'basic',
       created_date: normalizeDate(item.created_date),
       updated_date: normalizeDate(item.updated_date),
     }))
@@ -142,6 +166,20 @@ export const POST = async (request: Request) => {
     const payload = await request.json().catch(() => null)
     const name =
       typeof payload?.name === 'string' ? payload.name.trim() : undefined
+    const description =
+      typeof payload?.description === 'string' && payload.description.trim().length > 0
+        ? payload.description.trim()
+        : null
+    const rawType = typeof payload?.type === 'string' ? payload.type.trim().toLowerCase() : undefined
+    const rawDescription = typeof payload?.description === 'string' ? payload.description.trim() : undefined
+
+    console.debug('[ServiceCategory][PATCH] Incoming payload', {
+      id,
+      name,
+      rawType,
+      rawDescription,
+    })
+    const type: ServiceCategory['type'] = rawType === 'custom' ? 'custom' : 'basic'
 
     if (!name) {
       return versionedJson(
@@ -167,6 +205,8 @@ export const POST = async (request: Request) => {
     const created = await ServiceCategory.create({
       id: nextId,
       name,
+      description,
+      type,
       created_date: now,
       updated_date: now,
     })
@@ -177,6 +217,11 @@ export const POST = async (request: Request) => {
         data: {
           id: created.id,
           name: created.name,
+          description:
+            typeof created.description === 'string' && created.description.trim().length > 0
+              ? created.description.trim()
+              : null,
+          type: typeof created.type === 'string' && created.type.trim().toLowerCase() === 'custom' ? 'custom' : 'basic',
           created_date: created.created_date?.toISOString() ?? now.toISOString(),
           updated_date: created.updated_date?.toISOString() ?? now.toISOString(),
         },
@@ -205,6 +250,8 @@ export const PATCH = async (request: Request) => {
     const id = typeof payload?.id === 'number' ? payload.id : undefined
     const name =
       typeof payload?.name === 'string' ? payload.name.trim() : undefined
+    const rawType = typeof payload?.type === 'string' ? payload.type.trim().toLowerCase() : undefined
+    const rawDescription = typeof payload?.description === 'string' ? payload.description.trim() : undefined
 
     if (typeof id !== 'number' || !name) {
       return versionedJson(
@@ -214,6 +261,39 @@ export const PATCH = async (request: Request) => {
     }
 
     const ServiceCategory = getServiceCategoryModel(connection)
+
+    const existingCategory = await ServiceCategory.findOne({ id })
+
+    if (!existingCategory) {
+      return versionedJson(
+        { success: false, message: 'Service category not found' },
+        { status: 404 },
+      )
+    }
+
+    const normalizedExistingType =
+      typeof existingCategory.type === 'string' && existingCategory.type.trim().toLowerCase() === 'custom'
+        ? 'custom'
+        : 'basic'
+
+    console.debug('[ServiceCategory][PATCH] Incoming payload', {
+      id,
+      name,
+      rawType,
+      rawDescription,
+    })
+
+    const type: ServiceCategory['type'] = rawType === 'custom'
+      ? 'custom'
+      : rawType === 'basic'
+        ? 'basic'
+        : normalizedExistingType
+    const description =
+      typeof rawDescription === 'string' && rawDescription.length > 0
+        ? rawDescription
+        : rawDescription === ''
+          ? null
+          : existingCategory.description ?? null
 
     const duplicate = await ServiceCategory.findOne({
       id: { $ne: id },
@@ -227,29 +307,25 @@ export const PATCH = async (request: Request) => {
       )
     }
 
-    const updated = await ServiceCategory.findOneAndUpdate(
-      { id },
-      {
-        name,
-        updated_date: new Date(),
-      },
-      { new: true },
-    )
+    existingCategory.name = name
+    existingCategory.description = description
+    existingCategory.type = type
+    existingCategory.updated_date = new Date()
 
-    if (!updated) {
-      return versionedJson(
-        { success: false, message: 'Service category not found' },
-        { status: 404 },
-      )
-    }
+    await existingCategory.save()
 
     return versionedJson({
       success: true,
       data: {
-        id: updated.id,
-        name: updated.name,
-        created_date: updated.created_date?.toISOString() ?? null,
-        updated_date: updated.updated_date?.toISOString() ?? null,
+        id: existingCategory.id,
+        name: existingCategory.name,
+        description:
+          typeof existingCategory.description === 'string' && existingCategory.description.trim().length > 0
+            ? existingCategory.description.trim()
+            : null,
+        type,
+        created_date: existingCategory.created_date?.toISOString() ?? null,
+        updated_date: existingCategory.updated_date?.toISOString() ?? null,
       },
     })
   } catch (error: unknown) {

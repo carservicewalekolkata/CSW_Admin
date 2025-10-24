@@ -26,12 +26,27 @@ const initialState: ServiceCategoriesState = {
 const findCategoryIndex = (items: ServiceCategory[], id: number) =>
   items.findIndex((item) => item.id === id)
 
+const ensureCategoryType = (category: ServiceCategory): ServiceCategory => {
+  const normalized = typeof category.type === 'string' ? category.type.trim().toLowerCase() : null
+  const safeType: ServiceCategory['type'] = normalized === 'custom' ? 'custom' : 'basic'
+  const descriptionValue =
+    typeof category.description === 'string' && category.description.trim().length > 0
+      ? category.description.trim()
+      : null
+
+  return {
+    ...category,
+    description: descriptionValue,
+    type: safeType,
+  }
+}
+
 const serviceCategoriesSlice = createSlice({
   name: 'serviceCategories',
   initialState,
   reducers: {
     addServiceCategory(state, action: PayloadAction<ServiceCategory>) {
-      const category = action.payload
+      const category = ensureCategoryType(action.payload)
       const existingIndex = findCategoryIndex(state.items, category.id)
 
       if (existingIndex !== -1) {
@@ -42,7 +57,7 @@ const serviceCategoriesSlice = createSlice({
       }
     },
     updateServiceCategory(state, action: PayloadAction<ServiceCategory>) {
-      const category = action.payload
+      const category = ensureCategoryType(action.payload)
       const targetIndex = findCategoryIndex(state.items, category.id)
 
       if (targetIndex !== -1) {
@@ -71,7 +86,9 @@ const serviceCategoriesSlice = createSlice({
       })
       .addMatcher(serviceCategoriesApi.endpoints.fetchServiceCategories.matchFulfilled, (state, action) => {
         const response = action.payload as ServiceCategoryResponse
-        state.items = Array.isArray(response.data) ? response.data : []
+        state.items = Array.isArray(response.data)
+          ? response.data.map(ensureCategoryType)
+          : []
         state.total = typeof response.total === 'number' ? response.total : response.count ?? 0
         state.page = typeof response.page === 'number' ? response.page : 1
         state.limit = typeof response.limit === 'number' ? response.limit : state.limit

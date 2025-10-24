@@ -5,6 +5,8 @@ import { getMongooseModelForConnection } from "@/utils/getMongooseModelForConnec
 export interface IServiceCategory extends Document {
   id: number;
   name: string;
+  description?: string | null;
+  type: 'basic' | 'custom';
   created_date: Date;
   updated_date: Date;
 }
@@ -14,6 +16,8 @@ const schemaFactory = () =>
     {
       id: { type: Number, required: true, unique: true },
       name: { type: String, required: true },
+      description: { type: String, default: null },
+      type: { type: String, enum: ['basic', 'custom'], required: true, default: 'basic' },
       created_date: { type: Date, required: true, default: Date.now },
       updated_date: { type: Date, required: true, default: Date.now },
     },

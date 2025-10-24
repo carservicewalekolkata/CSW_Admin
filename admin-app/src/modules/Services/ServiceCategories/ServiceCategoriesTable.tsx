@@ -16,6 +16,36 @@ const ServiceCategoriesTable = ({ items, isLoading, onEdit, onDelete }: ServiceC
   const columns = useMemo<TableColumn<ServiceCategory>[]>(() => {
     const base: TableColumn<ServiceCategory>[] = [
       { key: 'name', label: 'Category Name' },
+      {
+        key: 'description',
+        label: 'Description',
+        render: (row) =>
+          row.description ? (
+            <span className="block text-sm text-brand-600">{row.description}</span>
+          ) : (
+            <span className="text-sm text-brand-400">—</span>
+          ),
+        className: 'max-w-xs',
+      },
+      {
+        key: 'type',
+        label: 'Type',
+        render: (row) => {
+          const normalized = row.type?.toLowerCase() === 'custom' ? 'custom' : 'basic'
+          return (
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                normalized === 'custom'
+                  ? 'bg-brand-100 text-brand-700'
+                  : 'bg-emerald-100 text-emerald-700'
+              }`}
+            >
+              {normalized === 'custom' ? 'Custom' : 'Basic'}
+            </span>
+          )
+        },
+        className: 'w-32',
+      },
       { key: 'created_date', label: 'Created', render: (row) => formatServiceCategoryDate(row.created_date) },
       { key: 'updated_date', label: 'Updated', render: (row) => formatServiceCategoryDate(row.updated_date) },
       {

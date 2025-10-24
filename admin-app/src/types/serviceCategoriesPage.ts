@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 
-import type { ServiceCategory } from './serviceCategories'
+import type { ServiceCategory, ServiceCategoryType } from './serviceCategories'
 
 export type FiltersState = {
   searchTerm: string
@@ -21,11 +21,15 @@ export type FiltersState = {
 export type CreateModalState = {
   isOpen: boolean
   name: string
+  description: string
+  type: ServiceCategoryType
   error: string | null
   isSubmitting: boolean
   open: () => void
   close: () => void
   onNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onTypeChange: (value: ServiceCategoryType) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
 }
 
@@ -33,11 +37,15 @@ export type EditModalState = {
   isOpen: boolean
   target: ServiceCategory | null
   name: string
+  description: string
+  type: ServiceCategoryType
   error: string | null
   isSubmitting: boolean
   open: (category: ServiceCategory) => void
   close: () => void
   onNameChange: (value: string) => void
+  onDescriptionChange: (value: string) => void
+  onTypeChange: (value: ServiceCategoryType) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
 }
 

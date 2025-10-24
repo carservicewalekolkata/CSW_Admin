@@ -157,7 +157,11 @@ const GomechanicPanel: FC = () => {
     }))
   }
 
-  const persistServiceCategory = async (categoryKey: string, rawName: string) => {
+  const persistServiceCategory = async (
+    categoryKey: string,
+    rawName: string,
+    descriptionOverride?: string,
+  ) => {
     const trimmedName = rawName.trim()
     if (!trimmedName) {
       setCategoryPersistState((previous) => ({
@@ -188,12 +192,25 @@ const GomechanicPanel: FC = () => {
 
     try {
       const serviceCategoryUrl = `${APIEndpoint.BackendUrl}${APIEndpoint.services.servicesCategory}`
+      const categoryType = categoryKey.startsWith('custom-') ? 'custom' : 'basic'
+      const resolvedDescription = (() => {
+        if (typeof descriptionOverride === 'string' && descriptionOverride.trim().length > 0) {
+          return descriptionOverride.trim()
+        }
+
+        const matchedSeedCategory = gomechanicCategories.find((category) => category.id === categoryKey)
+        if (matchedSeedCategory?.description) {
+          return matchedSeedCategory.description
+        }
+
+        return null
+      })()
       const response = await fetch(serviceCategoryUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name: trimmedName }),
+        body: JSON.stringify({ name: trimmedName, description: resolvedDescription, type: categoryType }),
         credentials: 'include',
       })
 
@@ -243,7 +260,7 @@ const GomechanicPanel: FC = () => {
     if (willEnable) {
       const category = formState.customCategories.find((item) => item.key === categoryId)
       if (category?.label.trim()) {
-        void persistServiceCategory(categoryId, category.label)
+        void persistServiceCategory(categoryId, category.label, category.description)
       }
     }
   }
@@ -360,7 +377,8 @@ const GomechanicPanel: FC = () => {
 
   const handleCustomCategoryLabelBlur = (categoryKey: string, event: FocusEvent<HTMLInputElement>) => {
     const value = event.target.value
-    void persistServiceCategory(categoryKey, value)
+    const category = formState.customCategories.find((item) => item.key === categoryKey)
+    void persistServiceCategory(categoryKey, value, category?.description)
   }
 
   const handleCustomCategoryTemplateChange = (categoryKey: string, templateId: string) => {
@@ -409,7 +427,7 @@ const GomechanicPanel: FC = () => {
     })
 
     if (template?.label) {
-      void persistServiceCategory(categoryKey, template.label)
+      void persistServiceCategory(categoryKey, template.label, template.description)
     } else {
       setCategoryPersistState((previous) => ({
         ...previous,
@@ -429,7 +447,7 @@ const GomechanicPanel: FC = () => {
         return { success: false as const, message: 'Provide a name for each selected category before running the seed.' }
       }
 
-      const result = await persistServiceCategory(category.key, name)
+      const result = await persistServiceCategory(category.key, name, category.description)
       if (!result.success) {
         return {
           success: false as const,

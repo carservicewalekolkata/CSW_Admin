@@ -11,7 +11,7 @@ import {
   removeServiceCategory,
   useUpdateServiceCategoryMutation,
 } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
-import type { ServiceCategory } from '@/types/serviceCategories'
+import type { ServiceCategory, ServiceCategoryType } from '@/types/serviceCategories'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import { resolveServiceCategoryErrorMessage } from '@/utils/serviceCategories'
 import type {
@@ -40,9 +40,13 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const [deleteTarget, setDeleteTarget] = useState<ServiceCategory | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryDescription, setNewCategoryDescription] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+  const [newCategoryType, setNewCategoryType] = useState<ServiceCategoryType>('basic')
   const [editingCategory, setEditingCategory] = useState<ServiceCategory | null>(null)
   const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editType, setEditType] = useState<ServiceCategoryType>('basic')
   const [editError, setEditError] = useState<string | null>(null)
 
   const dispatch = useAppDispatch()
@@ -82,11 +86,15 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const openCreateModal = () => {
     setIsCreateModalOpen(true)
     setCreateError(null)
+    setNewCategoryType('basic')
+    setNewCategoryDescription('')
   }
   const closeCreateModal = () => {
     setIsCreateModalOpen(false)
     setNewCategoryName('')
     setCreateError(null)
+    setNewCategoryType('basic')
+    setNewCategoryDescription('')
   }
 
   const handleCreateSubmit: CreateModalState['onSubmit'] = async (event) => {
@@ -101,11 +109,21 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
 
     try {
       setCreateError(null)
-      const response = await createServiceCategory({ name: trimmed }).unwrap()
+      const response = await createServiceCategory({
+        name: trimmed,
+        description: newCategoryDescription.trim() ? newCategoryDescription.trim() : null,
+        type: newCategoryType,
+      }).unwrap()
       const createdCategory = response.data
       const createdName = createdCategory?.name ?? trimmed
       if (createdCategory) {
-        dispatch(addServiceCategory(createdCategory))
+        dispatch(
+          addServiceCategory({
+            ...createdCategory,
+            description: createdCategory.description ?? (newCategoryDescription.trim() || null),
+            type: createdCategory.type ?? 'basic',
+          }),
+        )
       }
       toast.success(`Created category: ${createdName}`)
       closeCreateModal()
@@ -162,6 +180,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const createModal: CreateModalState = {
     isOpen: isCreateModalOpen,
     name: newCategoryName,
+    description: newCategoryDescription,
+    type: newCategoryType,
     error: createError,
     isSubmitting: isCreating,
     open: openCreateModal,
@@ -172,6 +192,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
         setCreateError(null)
       }
     },
+    onDescriptionChange: (value) => setNewCategoryDescription(value),
+    onTypeChange: (value) => setNewCategoryType(value),
     onSubmit: handleCreateSubmit,
   }
 
@@ -185,12 +207,16 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
   const openEditModal = (category: ServiceCategory) => {
     setEditingCategory(category)
     setEditName(category.name)
+    setEditDescription(category.description ?? '')
+    setEditType(category.type ?? 'basic')
     setEditError(null)
   }
 
   const closeEditModal = () => {
     setEditingCategory(null)
     setEditName('')
+    setEditDescription('')
+    setEditType('basic')
     setEditError(null)
   }
 
@@ -204,22 +230,33 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
       return
     }
 
-    if (trimmed === editingCategory.name) {
+    if (
+      trimmed === editingCategory.name &&
+      editType === (editingCategory.type ?? 'basic') &&
+      (editDescription.trim() || '') === (editingCategory.description ?? '')
+    ) {
       toast.info('No changes to save')
       return
     }
 
     try {
       setEditError(null)
-      const response = await updateServiceCategory({ id: editingCategory.id, name: trimmed }).unwrap()
+      const response = await updateServiceCategory({
+        id: editingCategory.id,
+        name: trimmed,
+        description: editDescription.trim() ? editDescription.trim() : null,
+        type: editType,
+      }).unwrap()
       const updatedCategory =
         response.data ?? {
           ...editingCategory,
           name: trimmed,
+          description: editDescription.trim() ? editDescription.trim() : null,
+          type: editType,
           updated_date: new Date().toISOString(),
         }
 
-      dispatch(updateServiceCategoryAction(updatedCategory))
+      dispatch(updateServiceCategoryAction({ ...updatedCategory, type: updatedCategory.type ?? 'basic' }))
       toast.success(`Updated category: ${updatedCategory.name}`)
       closeEditModal()
       await refetch()
@@ -234,6 +271,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
     isOpen: Boolean(editingCategory),
     target: editingCategory,
     name: editName,
+    description: editDescription,
+    type: editType,
     error: editError,
     isSubmitting: isUpdating,
     open: openEditModal,
@@ -244,6 +283,8 @@ export const useServiceCategoriesPage = (): UseServiceCategoriesPageResult => {
         setEditError(null)
       }
     },
+    onDescriptionChange: (value) => setEditDescription(value),
+    onTypeChange: (value) => setEditType(value),
     onSubmit: handleEditSubmit,
   }
 
