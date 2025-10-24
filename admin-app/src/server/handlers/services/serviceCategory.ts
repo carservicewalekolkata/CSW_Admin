@@ -166,15 +166,14 @@ export const POST = async (request: Request) => {
     const payload = await request.json().catch(() => null)
     const name =
       typeof payload?.name === 'string' ? payload.name.trim() : undefined
+    const rawDescription = typeof payload?.description === 'string' ? payload.description.trim() : undefined
     const description =
-      typeof payload?.description === 'string' && payload.description.trim().length > 0
-        ? payload.description.trim()
+      typeof rawDescription === 'string' && rawDescription.length > 0
+        ? rawDescription
         : null
     const rawType = typeof payload?.type === 'string' ? payload.type.trim().toLowerCase() : undefined
-    const rawDescription = typeof payload?.description === 'string' ? payload.description.trim() : undefined
 
-    console.debug('[ServiceCategory][PATCH] Incoming payload', {
-      id,
+    console.debug('[ServiceCategory][POST] Incoming payload', {
       name,
       rawType,
       rawDescription,
