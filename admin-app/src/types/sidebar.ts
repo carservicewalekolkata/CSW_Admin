@@ -10,6 +10,11 @@ export type SidebarProps = {
   children: ReactNode
 }
 
+export type SidebarState = {
+  isSecondaryOpen: boolean
+  viewport: 'small' | 'medium' | 'large'
+}
+
 export type SecondaryNavItem = {
   id: string
   label: string

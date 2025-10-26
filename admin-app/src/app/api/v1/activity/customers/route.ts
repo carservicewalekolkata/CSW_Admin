@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import {
-  CustomerActivityError,
-  listCustomerSessions,
-  recordCustomerActivity,
-  type CustomerActivityVehicle,
-} from '@/server/customerActivityStore'
+import { CustomerActivityError, listCustomerSessions, recordCustomerActivity } from '@/server/customerActivityStore'
+import type { CustomerActivityVehicle, CustomerCartStatus } from '@/types/customerActivity'
 import { applyCors, corsPreflight } from '@/server/cors'
 
 const isValidVehicle = (vehicle: CustomerActivityVehicle | null | undefined): vehicle is CustomerActivityVehicle =>
@@ -32,6 +28,10 @@ export async function POST(request: Request) {
 
     const sessionToken = typeof payload?.sessionToken === 'string' ? payload.sessionToken.trim() : undefined
     const vehicle: CustomerActivityVehicle | undefined = payload?.vehicle
+    const cartItems = Array.isArray(payload?.cartItems) ? payload.cartItems : undefined
+    const previousQueries = Array.isArray(payload?.previousQueries) ? payload.previousQueries : undefined
+    const cartStatus = isValidCartStatus(payload?.cartStatus) ? payload.cartStatus : undefined
+    const cartHistory = Array.isArray(payload?.cartHistory) ? payload.cartHistory : undefined
 
     if (!isValidVehicle(vehicle)) {
       const response = NextResponse.json({ message: 'Vehicle information is required.' }, { status: 400 })
@@ -42,6 +42,10 @@ export async function POST(request: Request) {
       const { session, entry } = await recordCustomerActivity({
         sessionToken,
         vehicle,
+        cartItems,
+        previousQueries,
+        cartStatus,
+        cartHistory,
       })
 
       const response = NextResponse.json({
@@ -69,6 +73,10 @@ export async function POST(request: Request) {
       phone,
       otpRequestId,
       vehicle,
+      cartItems,
+      previousQueries,
+      cartStatus,
+      cartHistory,
     })
 
     const response = NextResponse.json({
@@ -91,3 +99,5 @@ export async function POST(request: Request) {
     return applyCors(request, response)
   }
 }
+const isValidCartStatus = (value: unknown): value is CustomerCartStatus =>
+  value === 'hold' || value === 'solved' || value === 'cancelled'

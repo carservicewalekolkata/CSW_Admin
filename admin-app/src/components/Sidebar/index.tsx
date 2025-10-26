@@ -16,6 +16,8 @@ import PrimaryNavigation from './PrimaryNavigation'
 import SecondaryNavigation from './SecondaryNavigation'
 import AccountMenu from './AccountMenu'
 import MobileTabBar from './MobileTabBar'
+import { useAppDispatch, useAppSelector } from '@/store/hooks'
+import { setSidebarOpen, toggleSidebar, setViewport } from '@/store/slices'
 
 const accountMenuId = 'sidebar-account-menu'
 const accountMenuHeadingId = `${accountMenuId}-accounts`
@@ -101,9 +103,11 @@ const Sidebar = ({ user, children }: SidebarProps) => {
     [closeAccountMenu, router],
   )
 
-  const [secondaryOpen, setSecondaryOpen] = useState(false)
-  const [isMediumScreen, setIsMediumScreen] = useState(false)
-  const [isLargeScreen, setIsLargeScreen] = useState(false)
+  const dispatch = useAppDispatch()
+  const secondaryOpen = useAppSelector((state) => state.sidebar.isSecondaryOpen)
+  const viewport = useAppSelector((state) => state.sidebar.viewport)
+  const isMediumScreen = viewport !== 'small'
+  const isLargeScreen = viewport === 'large'
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -116,32 +120,28 @@ const Sidebar = ({ user, children }: SidebarProps) => {
     const setFromQueries = () => {
       const mediumMatches = mediumQuery.matches
       const largeMatches = largeQuery.matches
-
-      setIsMediumScreen(mediumMatches)
-      setIsLargeScreen(largeMatches)
-
-      if (largeMatches) {
-        setSecondaryOpen(true)
-      } else if (!mediumMatches) {
-        setSecondaryOpen(false)
+      const nextViewport = largeMatches ? 'large' : mediumMatches ? 'medium' : 'small'
+      dispatch(setViewport(nextViewport))
+      if (!mediumMatches) {
+        dispatch(setSidebarOpen(false))
       }
     }
 
     setFromQueries()
 
     const handleMediumChange = (event: MediaQueryListEvent) => {
-      setIsMediumScreen(event.matches)
-      if (!event.matches) {
-        setSecondaryOpen(false)
+      const matches = event.matches
+      dispatch(setViewport(matches ? 'medium' : 'small'))
+      if (!matches) {
+        dispatch(setSidebarOpen(false))
       }
     }
 
     const handleLargeChange = (event: MediaQueryListEvent) => {
-      setIsLargeScreen(event.matches)
-      if (event.matches) {
-        setSecondaryOpen(true)
-      } else if (!mediumQuery.matches) {
-        setSecondaryOpen(false)
+      const matches = event.matches
+      dispatch(setViewport(matches ? 'large' : mediumQuery.matches ? 'medium' : 'small'))
+      if (!matches && !mediumQuery.matches) {
+        dispatch(setSidebarOpen(false))
       }
     }
 
@@ -171,21 +171,22 @@ const Sidebar = ({ user, children }: SidebarProps) => {
       removeListener(mediumQuery, handleMediumChange)
       removeListener(largeQuery, handleLargeChange)
     }
-  }, [])
+  }, [dispatch])
 
-  const toggleSecondaryNavigation = useCallback(
-    () => setSecondaryOpen((previous) => !previous),
-    [],
-  )
+  const toggleSecondaryNavigation = useCallback(() => {
+    dispatch(toggleSidebar())
+  }, [dispatch])
 
-  const closeSecondaryNavigation = useCallback(() => setSecondaryOpen(false), [])
+  const closeSecondaryNavigation = useCallback(() => {
+    dispatch(setSidebarOpen(false))
+  }, [dispatch])
 
   const handlePrimarySelect = useCallback(
     (id: string) => {
       setActiveSection(id)
-      setSecondaryOpen(true)
+      dispatch(setSidebarOpen(true))
     },
-    [],
+    [dispatch],
   )
 
   const secondaryNavigationId = 'sidebar-secondary-navigation'

@@ -1,10 +1,179 @@
 {
   "sessions": [
     {
+      "token": "d3b60a91-2cec-48e6-99fa-e44d12e19785",
+      "phone": "8943434355",
+      "createdAt": "2025-10-26T17:55:12.868Z",
+      "updatedAt": "2025-10-26T17:56:14.405Z",
+      "entries": [
+        {
+          "id": "7da6e772-0df6-41c7-bb9c-b68c32b45a9a",
+          "sessionToken": "d3b60a91-2cec-48e6-99fa-e44d12e19785",
+          "phone": "8943434355",
+          "vehicle": {
+            "brandSlug": "sos-service",
+            "brandName": "SOS Service",
+            "modelSlug": "car-flooding",
+            "modelName": "Car Flooding",
+            "fuelType": "4 Hours"
+          },
+          "vehicleSummary": "4 Hours SOS Service Car Flooding",
+          "createdAt": "2025-10-26T17:55:12.868Z",
+          "cartStatus": "solved",
+          "cartItems": [
+            {
+              "id": "68fa245d0ca38a6336c98164-1761501305352",
+              "name": "Car Flooding",
+              "category": "SOS Service",
+              "price": 990,
+              "quantity": 1
+            }
+          ],
+          "previousQueries": [
+            "Interested in Car Flooding"
+          ],
+          "cartHistory": [
+            {
+              "id": "8c6df732-9dfd-4a99-a576-44d1e19cb97b",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T17:55:12.868Z"
+            },
+            {
+              "id": "4008e002-ba50-4738-bb5a-ee98281aa96e",
+              "note": "Status changed to solved",
+              "status": "solved",
+              "timestamp": "2025-10-26T17:56:04.609Z"
+            },
+            {
+              "id": "d152d0ce-b1d4-411e-8aa4-b8a487930c5a",
+              "note": "Status changed to cancelled",
+              "status": "cancelled",
+              "timestamp": "2025-10-26T17:56:09.938Z"
+            },
+            {
+              "id": "d6c67a96-628b-44ae-85ca-948e7909664d",
+              "note": "Status changed to solved",
+              "status": "solved",
+              "timestamp": "2025-10-26T17:56:14.405Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "token": "b899ef79-32de-470f-acda-29a8abdb7a82",
+      "phone": "8943434355",
+      "createdAt": "2025-10-26T17:50:21.446Z",
+      "updatedAt": "2025-10-26T17:50:21.446Z",
+      "entries": [
+        {
+          "id": "81c88e97-4989-4aa2-8aca-1f2890f00ecd",
+          "sessionToken": "b899ef79-32de-470f-acda-29a8abdb7a82",
+          "phone": "8943434355",
+          "vehicle": {
+            "brandSlug": "sos-service",
+            "brandName": "SOS Service",
+            "modelSlug": "car-flooding",
+            "modelName": "Car Flooding",
+            "fuelType": "4 Hours"
+          },
+          "vehicleSummary": "4 Hours SOS Service Car Flooding",
+          "createdAt": "2025-10-26T17:50:21.446Z",
+          "cartStatus": "hold",
+          "cartItems": [
+            {
+              "id": "68fa245d0ca38a6336c98164-1761500176845",
+              "name": "Car Flooding",
+              "category": "SOS Service",
+              "price": 990,
+              "quantity": 1
+            },
+            {
+              "id": "68fa1d790ca38a6336c98101-1761500194371",
+              "name": "Second Hand Car Inspection",
+              "category": "Car Inspections",
+              "price": 600,
+              "quantity": 1
+            }
+          ],
+          "previousQueries": [
+            "Interested in Car Flooding",
+            "Interested in Second Hand Car Inspection"
+          ],
+          "cartHistory": [
+            {
+              "id": "13f894c9-91c7-4ad8-bcfd-ab1212eb2d0a",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T17:50:21.446Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "token": "563912f9-1304-4b6f-8a12-be9a11816bf3",
+      "phone": "8943434355",
+      "createdAt": "2025-10-26T17:36:41.544Z",
+      "updatedAt": "2025-10-26T17:36:41.545Z",
+      "entries": [
+        {
+          "id": "946161fe-68d6-408a-9592-1eb461410ebd",
+          "sessionToken": "563912f9-1304-4b6f-8a12-be9a11816bf3",
+          "phone": "8943434355",
+          "vehicle": {
+            "brandSlug": "sos-service",
+            "brandName": "SOS Service",
+            "modelSlug": "car-flooding",
+            "modelName": "Car Flooding",
+            "fuelType": "4 Hours"
+          },
+          "vehicleSummary": "4 Hours SOS Service Car Flooding",
+          "createdAt": "2025-10-26T17:36:41.545Z",
+          "cartStatus": "cancelled",
+          "cartItems": [
+            {
+              "id": "cd3bcc1f-2b73-4f9d-8765-18f8e90ac936",
+              "name": "Periodic maintenance (Car Flooding)",
+              "category": "Core Service",
+              "price": 3328,
+              "quantity": 1
+            },
+            {
+              "id": "2b45c887-57e2-4b58-a020-b9f951f0fd18",
+              "name": "Detailing overhaul (Car Flooding)",
+              "category": "Detailing",
+              "price": 2048,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "SOS Service Car Flooding service cost",
+            "Car Flooding 4 Hours nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "979e89e7-a55d-47d2-b6be-da1a8fe32f43",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T17:36:41.544Z"
+            },
+            {
+              "id": "seed-cancelled-status",
+              "note": "Status changed to cancelled",
+              "status": "cancelled",
+              "timestamp": "2025-10-26T17:46:07Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "token": "440f4cbe-e6c4-4528-8fc9-50c0fe0d5f83",
       "phone": "8232328323",
       "createdAt": "2025-10-25T20:08:07.084Z",
-      "updatedAt": "2025-10-25T20:08:07.084Z",
+      "updatedAt": "2025-10-26T16:57:01.570Z",
       "entries": [
         {
           "id": "3e5e680d-1a86-466b-8ce2-5f0129259977",
@@ -18,7 +187,72 @@
             "fuelType": "Petrol"
           },
           "vehicleSummary": "Petrol Maruti Suzuki WagonR",
-          "createdAt": "2025-10-25T20:08:07.084Z"
+          "createdAt": "2025-10-25T20:08:07.084Z",
+          "cartStatus": "solved",
+          "cartItems": [
+            {
+              "id": "d383d22e-ef1e-474f-bb6b-663e771d79a6",
+              "name": "Periodic maintenance (WagonR)",
+              "category": "Core Service",
+              "price": 3318,
+              "quantity": 1
+            },
+            {
+              "id": "801bb0fc-33bc-472e-beae-42112f63f238",
+              "name": "Detailing overhaul (WagonR)",
+              "category": "Detailing",
+              "price": 2038,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "Maruti Suzuki WagonR service cost",
+            "WagonR Petrol nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "76067f20-7141-4192-9d0d-07a4086379f6",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:51:21.782Z"
+            },
+            {
+              "id": "34ce8bd0-af8b-4513-a649-3945cb206291",
+              "note": "Status changed to hold",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:56:38.409Z"
+            },
+            {
+              "id": "d153d46d-b6f0-44bb-bc19-0354e202eee9",
+              "note": "Status changed to solved",
+              "status": "solved",
+              "timestamp": "2025-10-26T16:56:39.138Z"
+            },
+            {
+              "id": "af2a6a5c-ef85-48c0-8d46-8d200fb1dbda",
+              "note": "Status changed to hold",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:56:41.443Z"
+            },
+            {
+              "id": "b59e76e3-0690-468e-bfad-298caefe754c",
+              "note": "Status changed to hold",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:56:42.732Z"
+            },
+            {
+              "id": "f2eb101e-f45e-4dbe-95dd-1778c583a150",
+              "note": "Status changed to hold",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:57:00.426Z"
+            },
+            {
+              "id": "3e027601-8f33-41c1-80ff-08b0c71e612f",
+              "note": "Status changed to solved",
+              "status": "solved",
+              "timestamp": "2025-10-26T16:57:01.570Z"
+            }
+          ]
         }
       ]
     },
@@ -40,7 +274,50 @@
             "fuelType": "Cng"
           },
           "vehicleSummary": "Cng Datsun GO Plus",
-          "createdAt": "2025-10-25T18:43:59.918Z"
+          "createdAt": "2025-10-25T18:43:59.918Z",
+          "cartStatus": "hold",
+          "cartItems": [
+            {
+              "id": "3698232a-7cdf-4218-8b07-602f4ec8c147",
+              "name": "Periodic maintenance (GO Plus)",
+              "category": "Core Service",
+              "price": 3344,
+              "quantity": 1
+            },
+            {
+              "id": "44a73b8b-b1cb-4040-8b7b-ba1af1dff99d",
+              "name": "Detailing overhaul (GO Plus)",
+              "category": "Detailing",
+              "price": 2064,
+              "quantity": 2
+            },
+            {
+              "id": "5902ca84-68a6-40f4-a095-3e42f54dfd69",
+              "name": "Battery health check (GO Plus)",
+              "category": "Electrical",
+              "price": 1584,
+              "quantity": 2
+            },
+            {
+              "id": "5335f95c-e3e0-43af-a01c-b2918aed3959",
+              "name": "Wheel alignment (GO Plus)",
+              "category": "Tyres",
+              "price": 1304,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "Datsun GO Plus service cost",
+            "GO Plus Cng nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "4794bd06-175d-4901-9e39-b150c03b562b",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:51:21.783Z"
+            }
+          ]
         }
       ]
     },
@@ -62,7 +339,50 @@
             "fuelType": "Petrol"
           },
           "vehicleSummary": "Petrol Datsun GO",
-          "createdAt": "2025-10-25T18:01:57.865Z"
+          "createdAt": "2025-10-25T18:01:57.865Z",
+          "cartStatus": "hold",
+          "cartItems": [
+            {
+              "id": "334655fa-d035-4241-a579-51e526b0283f",
+              "name": "Periodic maintenance (GO)",
+              "category": "Core Service",
+              "price": 3342,
+              "quantity": 1
+            },
+            {
+              "id": "ae50440f-52d6-4d21-b146-61b18f2fc970",
+              "name": "Detailing overhaul (GO)",
+              "category": "Detailing",
+              "price": 2062,
+              "quantity": 2
+            },
+            {
+              "id": "7bf9eb7c-ca65-45cc-85c8-5103e4f7d6e7",
+              "name": "Battery health check (GO)",
+              "category": "Electrical",
+              "price": 1582,
+              "quantity": 2
+            },
+            {
+              "id": "5b8219d0-45a7-40d6-8537-eb89b85f1144",
+              "name": "Wheel alignment (GO)",
+              "category": "Tyres",
+              "price": 1302,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "Datsun GO service cost",
+            "GO Petrol nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "e0c2c864-1460-4e74-ae00-35d86dc305a9",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:51:21.783Z"
+            }
+          ]
         }
       ]
     },
@@ -84,7 +404,50 @@
             "fuelType": "Petrol"
           },
           "vehicleSummary": "Petrol Datsun GO",
-          "createdAt": "2025-10-24T22:43:25.665Z"
+          "createdAt": "2025-10-24T22:43:25.665Z",
+          "cartStatus": "hold",
+          "cartItems": [
+            {
+              "id": "a3f58f6d-1be4-4d02-8a9c-f7f41ae7a7d9",
+              "name": "Periodic maintenance (GO)",
+              "category": "Core Service",
+              "price": 3342,
+              "quantity": 1
+            },
+            {
+              "id": "b3f36d81-6694-4dbb-9344-b38de60fba38",
+              "name": "Detailing overhaul (GO)",
+              "category": "Detailing",
+              "price": 2062,
+              "quantity": 2
+            },
+            {
+              "id": "e04f5d3e-89f0-4053-b138-2077a0aab273",
+              "name": "Battery health check (GO)",
+              "category": "Electrical",
+              "price": 1582,
+              "quantity": 2
+            },
+            {
+              "id": "3dc4c99d-11ba-48ed-b2fa-19895df627d4",
+              "name": "Wheel alignment (GO)",
+              "category": "Tyres",
+              "price": 1302,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "Datsun GO service cost",
+            "GO Petrol nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "78349c35-39f1-493b-87d3-c3cd2590cab4",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:51:21.783Z"
+            }
+          ]
         }
       ]
     },
@@ -106,7 +469,43 @@
             "fuelType": "Electric"
           },
           "vehicleSummary": "Electric Audi e-tron",
-          "createdAt": "2025-10-16T00:11:10.801Z"
+          "createdAt": "2025-10-16T00:11:10.801Z",
+          "cartStatus": "hold",
+          "cartItems": [
+            {
+              "id": "7c922de0-7292-4b2c-9e53-2bbddc1c53e3",
+              "name": "Periodic maintenance (e-tron)",
+              "category": "Core Service",
+              "price": 3334,
+              "quantity": 1
+            },
+            {
+              "id": "c7e1d622-1975-4b3e-a400-59cea26aecf5",
+              "name": "Detailing overhaul (e-tron)",
+              "category": "Detailing",
+              "price": 2054,
+              "quantity": 2
+            },
+            {
+              "id": "813ce171-aa39-4b24-b590-2a4a990dc0fa",
+              "name": "Battery health check (e-tron)",
+              "category": "Electrical",
+              "price": 1574,
+              "quantity": 2
+            }
+          ],
+          "previousQueries": [
+            "Audi e-tron service cost",
+            "e-tron Electric nearby workshops"
+          ],
+          "cartHistory": [
+            {
+              "id": "fa842e44-e0bf-4ebb-b4c7-654c96ba7630",
+              "note": "Cart created from vehicle search",
+              "status": "hold",
+              "timestamp": "2025-10-26T16:51:21.783Z"
+            }
+          ]
         }
       ]
     }

@@ -10,6 +10,7 @@ import {
   serviceCategoriesReducer,
   servicesReducer,
   uiReducer,
+  sidebarReducer,
   authApi,
   brandsApi,
   modelsApi,
@@ -17,7 +18,7 @@ import {
   servicesApi,
 } from './slices'
 
-import { authPersistConfig, rootPersistConfig } from './persist'
+import { authPersistConfig, rootPersistConfig, sidebarPersistConfig } from './persist'
 
 const combinedReducer = combineReducers({
   auth: persistReducer<AuthState>(authPersistConfig, authReducer),
@@ -26,6 +27,7 @@ const combinedReducer = combineReducers({
   services: servicesReducer,
   serviceCategories: serviceCategoriesReducer,
   ui: uiReducer,
+  sidebar: persistReducer(sidebarPersistConfig, sidebarReducer),
 
   // ✅ Add RTK Query API reducers
   [authApi.reducerPath]: authApi.reducer,

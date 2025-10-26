@@ -1,13 +1,11 @@
-import CustomersActivityTable, {
-  type CustomerActivityRow,
-} from '@/modules/Activity/Customers/CustomersActivityTable'
+import CustomersActivityTable, { type CustomerActivityRow } from '@/modules/Activity/Customers/CustomersActivityTable'
 import { listCustomerSessions } from '@/server/customerActivityStore'
 
 const buildRows = async (): Promise<CustomerActivityRow[]> => {
   const sessions = await listCustomerSessions()
 
-  return sessions.flatMap((session) =>
-    session.entries.map((entry, index) => ({
+  const rows = sessions.flatMap((session) =>
+    session.entries.map((entry) => ({
       id: entry.id,
       phone: session.phone,
       vehicleSummary: entry.vehicleSummary,
@@ -16,9 +14,20 @@ const buildRows = async (): Promise<CustomerActivityRow[]> => {
       fuelType: entry.vehicle.fuelType,
       searchedAt: entry.createdAt,
       sessionToken: session.token,
-      searchNumber: session.entries.length - index,
+      searchNumber: 0,
+      cartStatus: entry.cartStatus,
+      cartItems: entry.cartItems,
+      previousQueries: entry.previousQueries,
+      cartHistory: entry.cartHistory,
     })),
   )
+
+  rows.sort((a, b) => (a.searchedAt > b.searchedAt ? -1 : 1))
+  rows.forEach((row, index) => {
+    row.searchNumber = rows.length - index
+  })
+
+  return rows
 }
 
 const CustomersActivityPage = async () => {

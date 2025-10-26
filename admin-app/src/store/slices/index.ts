@@ -14,6 +14,7 @@ import servicesReducer from './services/servicesSlice'
 import { servicesApi } from './services/servicesApi'
 
 import uiReducer from './uiSlice'
+import sidebarReducer, { setSidebarOpen, toggleSidebar, setViewport } from './sidebar/sidebarSlice'
 
 export {
   authReducer,
@@ -22,10 +23,15 @@ export {
   serviceCategoriesReducer,
   servicesReducer,
   uiReducer,
+  sidebarReducer,
   
   authApi,
   brandsApi,
   modelsApi,
   serviceCategoriesApi,
   servicesApi,
+
+  setSidebarOpen,
+  toggleSidebar,
+  setViewport,
 }
