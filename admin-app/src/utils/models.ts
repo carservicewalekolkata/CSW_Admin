@@ -99,14 +99,39 @@ export const mapModelServicesToForm = (model: Model): ModelFormService[] =>
   model.services?.map((service) => ({
     serviceId: service.services_id,
     serviceName: service.name ?? 'Unnamed service',
+    fuelType: service.fuel_type ?? '',
     discount: service.discount.toString(),
     originalPrice: service.original_price.toString(),
     discountPrice: service.discount_price.toString(),
   })) ?? []
 
+export const sanitizeFuelTypes = (fuelTypes: string[]) => {
+  const unique = new Set<string>()
+  fuelTypes.forEach((fuel) => {
+    if (typeof fuel !== 'string') {
+      return
+    }
+    const normalized = fuel.trim()
+    if (!normalized) {
+      return
+    }
+    const titleCased = normalized
+      .toLowerCase()
+      .split(/\s+/)
+      .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ''))
+      .join(' ')
+      .trim()
+    if (titleCased) {
+      unique.add(titleCased)
+    }
+  })
+  return Array.from(unique)
+}
+
 export const buildModelServicesPayload = (services: ModelFormService[]) =>
   services.map((service) => ({
     serviceId: service.serviceId,
+    fuelType: service.fuelType.trim() || undefined,
     discount: toNumberOrZero(service.discount),
     originalPrice: toNumberOrZero(service.originalPrice),
     discountPrice: toNumberOrZero(service.discountPrice),
@@ -116,6 +141,7 @@ export const servicesChanged = (next: ModelFormService[], current: Model['servic
   const nextPayload = buildModelServicesPayload(next)
   const currentPayload = current.map((service) => ({
     serviceId: service.services_id,
+    fuelType: service.fuel_type ?? undefined,
     discount: service.discount,
     originalPrice: service.original_price,
     discountPrice: service.discount_price,
@@ -129,6 +155,7 @@ export const buildModelUpdatePayload = (values: ModelFormValues, model: Model) =
   const sanitizedSlug = slugifyModel(values.slug || trimmedName)
   const cleanedIconId = values.iconId.trim()
   const servicesPayload = buildModelServicesPayload(values.services)
+  const sanitizedFuelTypes = sanitizeFuelTypes(values.fuelTypes)
 
   const payload: {
     slug: string
@@ -138,6 +165,7 @@ export const buildModelUpdatePayload = (values: ModelFormValues, model: Model) =
     status?: boolean
     imagePath?: string | null
     iconId?: string | null
+    fuelType?: string[]
     services?: ReturnType<typeof buildModelServicesPayload>
   } = { slug: model.slug }
 
@@ -178,6 +206,12 @@ export const buildModelUpdatePayload = (values: ModelFormValues, model: Model) =
     hasChanges = true
   }
 
+  const existingFuelTypes = Array.isArray(model.fuel_type) ? model.fuel_type : []
+  if (JSON.stringify(sanitizedFuelTypes) !== JSON.stringify(existingFuelTypes)) {
+    payload.fuelType = sanitizedFuelTypes
+    hasChanges = true
+  }
+
   if (servicesChanged(values.services, model.services)) {
     payload.services = servicesPayload
     hasChanges = true
@@ -208,10 +242,13 @@ export const buildModelFormErrors = (values: ModelFormValues) => {
   }
 
   const sanitizedIcon = values.iconId.trim()
+  const sanitizedFuelTypes = sanitizeFuelTypes(values.fuelTypes)
+
   return {
     errors,
     trimmedName,
     sanitizedSlug,
     sanitizedIcon,
+    sanitizedFuelTypes,
   }
 }

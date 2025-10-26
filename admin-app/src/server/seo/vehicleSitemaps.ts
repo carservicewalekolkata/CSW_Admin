@@ -36,11 +36,15 @@ const normaliseFuelDisplay = (value: string): string => toTitleCase(value.trim()
 
 const normaliseFuelKey = (value: string): string => value.trim().toLowerCase()
 
-const buildVehicleSlug = (fuelType: string, brandSlug: string, modelSlug: string): string => {
-  const fuelSegment = slugifySegment(fuelType)
+const buildVehicleSlug = (fuelType: string | null | undefined, brandSlug: string, modelSlug: string): string => {
   const brandSegment = slugifySegment(brandSlug)
   const modelSegment = slugifySegment(modelSlug)
-  return `${fuelSegment}-${brandSegment}-${modelSegment}-services`
+  const fuelSegment =
+    typeof fuelType === 'string' && fuelType.trim().length > 0 ? slugifySegment(fuelType) : null
+  const segments = fuelSegment
+    ? [fuelSegment, brandSegment, modelSegment, 'services']
+    : [brandSegment, modelSegment, 'services']
+  return segments.join('-')
 }
 
 const parseDate = (value: unknown, fallback: Date): Date => {

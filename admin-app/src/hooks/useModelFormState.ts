@@ -16,6 +16,7 @@ const createEmptyFormValues = (brandSlug = ''): ModelFormValues => ({
   status: true,
   imagePath: '',
   iconId: '',
+  fuelTypes: [],
   services: [],
 })
 
@@ -57,6 +58,7 @@ export const useModelFormState = (defaultBrandSlug: string) => {
       status: model.status,
       imagePath: extractModelImagePath(model.image, model.image_path),
       iconId: extractModelIconId(model.thumbnail),
+      fuelTypes: Array.isArray(model.fuel_type) ? model.fuel_type : [],
       services: mapModelServicesToForm(model),
     })
     setErrors({})
@@ -112,6 +114,10 @@ export const useModelFormState = (defaultBrandSlug: string) => {
     setValues((prev) => ({ ...prev, services }))
   }
 
+  const setFuelTypes = (fuelTypes: string[]) => {
+    setValues((prev) => ({ ...prev, fuelTypes }))
+  }
+
   return {
     mode,
     values,
@@ -138,6 +144,7 @@ export const useModelFormState = (defaultBrandSlug: string) => {
     setName,
     setSlug,
     setServices,
+    setFuelTypes,
   }
 }
 

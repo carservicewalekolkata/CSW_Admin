@@ -13,9 +13,18 @@ type ModelsTableProps = {
   onEdit: (model: Model) => void
   onDelete: (model: Model) => void
   onPreviewServices: (model: Model) => void
+  onManageFuels: (model: Model) => void
 }
 
-const ModelsTable = ({ items, isLoading, deletingSlug, onEdit, onDelete, onPreviewServices }: ModelsTableProps) => {
+const ModelsTable = ({
+  items,
+  isLoading,
+  deletingSlug,
+  onEdit,
+  onDelete,
+  onPreviewServices,
+  onManageFuels,
+}: ModelsTableProps) => {
   const columns = useMemo<TableColumn<Model>[]>(() => {
     const base: TableColumn<Model>[] = [
       { key: 'name', label: 'Model' },
@@ -51,6 +60,20 @@ const ModelsTable = ({ items, isLoading, deletingSlug, onEdit, onDelete, onPrevi
           return '—'
         },
         className: 'text-xs text-brand-600/70',
+      },
+      {
+        key: 'fuel_type',
+        label: 'Fuels',
+        render: (row) => (
+          <button
+            type="button"
+            className="text-xs font-semibold text-brand-600 underline underline-offset-2 transition hover:text-brand-700"
+            onClick={() => onManageFuels(row)}
+          >
+            {row.fuel_type.length > 0 ? `${row.fuel_type.length} configured` : 'Add fuels'}
+          </button>
+        ),
+        className: 'w-32 text-brand-600',
       },
       { key: 'slug', label: 'Slug', className: 'text-xs text-brand-600/70' },
       {
@@ -118,7 +141,7 @@ const ModelsTable = ({ items, isLoading, deletingSlug, onEdit, onDelete, onPrevi
       },
     ]
     return base
-  }, [deletingSlug, onDelete, onEdit, onPreviewServices])
+  }, [deletingSlug, onDelete, onEdit, onPreviewServices, onManageFuels])
 
   return (
     <Table

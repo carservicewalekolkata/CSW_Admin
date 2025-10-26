@@ -6,6 +6,7 @@ export interface ModelService {
   services_id: string
   name: string | null
   time_taken: string | null
+  fuel_type: string | null
   discount: number
   original_price: number
   discount_price: number
@@ -53,6 +54,7 @@ export type ModelResponse = {
 
 export type ModelServiceInput = {
   serviceId: string
+  fuelType?: string
   discount?: number
   originalPrice?: number
   discountPrice?: number

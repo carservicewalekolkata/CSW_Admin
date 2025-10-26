@@ -53,9 +53,16 @@ export const useModelFormServices = ({
       setPickerError('Select a service')
       return
     }
+    if (!picker.fuelType) {
+      setPickerError('Select a fuel type')
+      return
+    }
 
-    if (services.some((service) => service.serviceId === picker.serviceId)) {
-      setPickerError('Service already added')
+    const duplicate = services.some(
+      (service) => service.serviceId === picker.serviceId && service.fuelType === picker.fuelType,
+    )
+    if (duplicate) {
+      setPickerError('Service already added for this fuel type')
       return
     }
 
@@ -67,6 +74,7 @@ export const useModelFormServices = ({
       {
         serviceId: picker.serviceId,
         serviceName,
+        fuelType: picker.fuelType,
         discount: picker.discount || '0',
         originalPrice: picker.originalPrice || '0',
         discountPrice: picker.discountPrice || '0',
@@ -76,6 +84,7 @@ export const useModelFormServices = ({
     setPicker({
       categoryId: picker.categoryId,
       serviceId: '',
+      fuelType: '',
       discount: '',
       originalPrice: '',
       discountPrice: '',
@@ -84,17 +93,17 @@ export const useModelFormServices = ({
   }, [picker, serviceOptions, services, setPicker, setPickerError, setServices])
 
   const removeService = useCallback(
-    (serviceId: string) => {
-      setServices(services.filter((service) => service.serviceId !== serviceId))
+    (index: number) => {
+      setServices(services.filter((_, currentIndex) => currentIndex !== index))
     },
     [services, setServices],
   )
 
   const updateServiceValue = useCallback(
-    (serviceId: string, field: keyof Omit<ModelFormService, 'serviceId' | 'serviceName'>, value: string) => {
+    (index: number, field: keyof Omit<ModelFormService, 'serviceId' | 'serviceName'>, value: string) => {
       setServices(
-        services.map((service) =>
-          service.serviceId === serviceId ? { ...service, [field]: value } : service,
+        services.map((service, serviceIndex) =>
+          serviceIndex === index ? { ...service, [field]: value } : service,
         ),
       )
     },

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { GridFSBucket } from 'mongodb'
 import { Types } from 'mongoose'
+import type { Connection } from 'mongoose'
 
 import { versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
@@ -21,6 +22,7 @@ import {
 
 type RawModelService = {
   services_id: unknown
+  fuel_type?: string | null
   discount: number
   original_price: number
   discount_price: number
@@ -220,6 +222,78 @@ const toServiceIdString = (value: unknown): string | null => {
   return null
 }
 
+type ServiceMetadata = Record<string, { name: string | null; time_taken: string | null }>
+
+const mapServicesWithMetadata = (services: RawModelService[], metadata: ServiceMetadata): ModelService[] =>
+  services
+    .map((service) => {
+      const serviceId = toServiceIdString(service.services_id)
+
+      if (!serviceId) {
+        return null
+      }
+
+      const entry = metadata[serviceId] ?? { name: null, time_taken: null }
+
+      return {
+        services_id: serviceId,
+        name: entry.name,
+        time_taken: entry.time_taken,
+        fuel_type:
+          typeof service.fuel_type === 'string' && service.fuel_type.trim().length > 0
+            ? service.fuel_type.trim()
+            : null,
+        discount: Number.isFinite(service.discount) ? Number(service.discount) : 0,
+        original_price: Number.isFinite(service.original_price) ? Number(service.original_price) : 0,
+        discount_price: Number.isFinite(service.discount_price) ? Number(service.discount_price) : 0,
+      } satisfies ModelService
+    })
+    .filter((service): service is ModelService => service !== null)
+
+const buildServiceMetadataForServices = async (
+  connection: Connection | null | undefined,
+  services: RawModelService[],
+): Promise<ServiceMetadata> => {
+  if (!connection?.db || services.length === 0) {
+    return {}
+  }
+
+  const uniqueIds = Array.from(
+    new Set(
+      services
+        .map((service) => toServiceIdString(service.services_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  )
+
+  const validIds = uniqueIds.filter((id) => Types.ObjectId.isValid(id))
+
+  if (validIds.length === 0) {
+    return {}
+  }
+
+  const ServiceModel = getServiceModel(connection)
+  const docs = await ServiceModel.find({ _id: { $in: validIds.map((id) => new Types.ObjectId(id)) } })
+    .select(['_id', 'name', 'time_taken'])
+    .lean<Array<{ _id: Types.ObjectId; name?: unknown; time_taken?: unknown }>>()
+
+  return docs.reduce<ServiceMetadata>((acc, doc) => {
+    const id = doc._id?.toString()
+    if (!id) {
+      return acc
+    }
+
+    const name = typeof doc.name === 'string' && doc.name.trim().length > 0 ? doc.name.trim() : null
+    const timeTaken =
+      typeof doc.time_taken === 'string' && doc.time_taken.trim().length > 0
+        ? doc.time_taken.trim()
+        : null
+
+    acc[id] = { name, time_taken: timeTaken }
+    return acc
+  }, {})
+}
+
 const fetchModelsFromDatabase = async (params: QueryParams) => {
   const mongooseInstance = await connectToDatabase()
   const connection = mongooseInstance.connection
@@ -334,7 +408,7 @@ export async function GET(request: Request) {
       })
     })
 
-    let serviceMetadata: Record<string, { name: string | null; time_taken: string | null }> = {}
+    let serviceMetadata: ServiceMetadata = {}
 
     if (serviceIdSet.size > 0) {
       const validObjectIds = Array.from(serviceIdSet).filter((id) => Types.ObjectId.isValid(id))
@@ -347,27 +421,24 @@ export async function GET(request: Request) {
           .select(['_id', 'name', 'time_taken'])
           .lean<Array<{ _id: Types.ObjectId; name?: unknown; time_taken?: unknown }>>()
 
-        serviceMetadata = services.reduce<Record<string, { name: string | null; time_taken: string | null }>>(
-          (acc, service) => {
-            const id = service._id?.toString()
-            if (!id) {
-              return acc
-            }
-
-            const name =
-              typeof service.name === 'string' && service.name.trim().length > 0
-                ? service.name.trim()
-                : null
-            const timeTaken =
-              typeof service.time_taken === 'string' && service.time_taken.trim().length > 0
-                ? service.time_taken.trim()
-                : null
-
-            acc[id] = { name, time_taken: timeTaken }
+        serviceMetadata = services.reduce<ServiceMetadata>((acc, service) => {
+          const id = service._id?.toString()
+          if (!id) {
             return acc
-          },
-          {},
-        )
+          }
+
+          const name =
+            typeof service.name === 'string' && service.name.trim().length > 0
+              ? service.name.trim()
+              : null
+          const timeTaken =
+            typeof service.time_taken === 'string' && service.time_taken.trim().length > 0
+              ? service.time_taken.trim()
+              : null
+
+          acc[id] = { name, time_taken: timeTaken }
+          return acc
+        }, {})
       }
     }
 
@@ -388,26 +459,7 @@ export async function GET(request: Request) {
         thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
         image: imageInfo.view,
         image_path: imageInfo.raw,
-        services: services
-          .map((service) => {
-            const serviceId = toServiceIdString(service.services_id)
-
-            if (!serviceId) {
-              return null
-            }
-
-            const metadata = serviceMetadata[serviceId] ?? { name: null, time_taken: null }
-
-            return {
-              services_id: serviceId,
-              name: metadata.name,
-              time_taken: metadata.time_taken,
-              discount: Number.isFinite(service.discount) ? Number(service.discount) : 0,
-              original_price: Number.isFinite(service.original_price) ? Number(service.original_price) : 0,
-              discount_price: Number.isFinite(service.discount_price) ? Number(service.discount_price) : 0,
-            } satisfies ModelService
-          })
-          .filter((service): service is ModelService => service !== null),
+        services: mapServicesWithMetadata(services, serviceMetadata),
         status: Boolean(model.status),
         created_date: normalizeDate(model.created_date),
         updated_date: normalizeDate(model.updated_date),
@@ -606,9 +658,15 @@ export async function POST(request: Request) {
         const discount = Number((service as { discount?: unknown }).discount ?? 0)
         const originalPrice = Number((service as { originalPrice?: unknown }).originalPrice ?? 0)
         const discountPrice = Number((service as { discountPrice?: unknown }).discountPrice ?? 0)
+        const rawFuelType = (service as { fuelType?: unknown }).fuelType
+        const fuelTypeValue =
+          typeof rawFuelType === 'string' && rawFuelType.trim().length > 0
+            ? rawFuelType.trim()
+            : null
 
         return {
           services_id: new Types.ObjectId(serviceId),
+          fuel_type: fuelTypeValue,
           discount: Number.isFinite(discount) ? discount : 0,
           original_price: Number.isFinite(originalPrice) ? originalPrice : 0,
           discount_price: Number.isFinite(discountPrice) ? discountPrice : 0,
@@ -655,6 +713,9 @@ export async function POST(request: Request) {
     const leanCreated = toLeanModelForSitemaps(created, now)
     const thumbnailId = normalizeIconId(created.thumbnail)
     const createdImage = resolveModelImage(created.image)
+    const createdServices = Array.isArray(created.services) ? created.services : []
+    const createdServicesMetadata = await buildServiceMetadataForServices(connection, createdServices)
+    const createdServicesResponse = mapServicesWithMetadata(createdServices, createdServicesMetadata)
 
     await syncVehicleSitemapsForModel(connection, leanCreated, {
       slug: slugify(
@@ -680,7 +741,7 @@ export async function POST(request: Request) {
           thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
           image: createdImage.view,
           image_path: createdImage.raw,
-          services: created.services ?? [],
+          services: createdServicesResponse,
           status: Boolean(created.status),
           created_date: normalizeDate(created.created_date) ?? now.toISOString(),
           updated_date: normalizeDate(created.updated_date) ?? now.toISOString(),
@@ -945,9 +1006,15 @@ export async function PATCH(request: Request) {
           const discount = Number((service as { discount?: unknown }).discount ?? 0)
           const originalPrice = Number((service as { originalPrice?: unknown }).originalPrice ?? 0)
           const discountPrice = Number((service as { discountPrice?: unknown }).discountPrice ?? 0)
+          const rawFuelType = (service as { fuelType?: unknown }).fuelType
+          const fuelTypeValue =
+            typeof rawFuelType === 'string' && rawFuelType.trim().length > 0
+              ? rawFuelType.trim()
+              : null
 
           return {
             services_id: new Types.ObjectId(serviceId),
+            fuel_type: fuelTypeValue,
             discount: Number.isFinite(discount) ? discount : 0,
             original_price: Number.isFinite(originalPrice) ? originalPrice : 0,
             discount_price: Number.isFinite(discountPrice) ? discountPrice : 0,
@@ -991,6 +1058,9 @@ export async function PATCH(request: Request) {
     const leanUpdated = toLeanModelForSitemaps(updated, now)
     const thumbnailId = normalizeIconId(updated.thumbnail)
     const updatedImage = resolveModelImage(updated.image)
+    const updatedServices = Array.isArray(updated.services) ? updated.services : []
+    const updatedServicesMetadata = await buildServiceMetadataForServices(connection, updatedServices)
+    const updatedServicesResponse = mapServicesWithMetadata(updatedServices, updatedServicesMetadata)
 
     await syncVehicleSitemapsForModel(connection, leanUpdated)
 
@@ -1045,7 +1115,7 @@ export async function PATCH(request: Request) {
         thumbnail: thumbnailId ? `/api/v1/cars/models/icon/${thumbnailId}` : null,
         image: updatedImage.view,
         image_path: updatedImage.raw,
-        services: updated.services ?? [],
+        services: updatedServicesResponse,
         status: Boolean(updated.status),
         created_date: normalizeDate(updated.created_date),
         updated_date: normalizeDate(updated.updated_date) ?? now.toISOString(),

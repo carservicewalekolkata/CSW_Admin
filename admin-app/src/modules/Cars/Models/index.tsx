@@ -8,9 +8,10 @@ import ModelsTable from './ModelsTable'
 import ModelFormModal from './ModelFormModal'
 import ModelDeleteModal from './ModelDeleteModal'
 import ModelServicesPreviewModal from './ModelServicesPreviewModal'
+import ModelFuelModal from './ModelFuelModal'
 
 const ModelsPageClient = () => {
-  const { items, isTableLoading, bannerError, filters, formModal, deleteModal, servicesPreview } =
+  const { items, isTableLoading, bannerError, filters, formModal, deleteModal, servicesPreview, fuelModal } =
     useModelsPage()
 
   return (
@@ -47,11 +48,13 @@ const ModelsPageClient = () => {
         onEdit={formModal.openEdit}
         onDelete={deleteModal.request}
         onPreviewServices={servicesPreview.open}
+        onManageFuels={fuelModal.open}
       />
 
       <ModelFormModal modal={formModal} />
       <ModelDeleteModal modal={deleteModal} />
       <ModelServicesPreviewModal preview={servicesPreview} />
+      <ModelFuelModal modal={fuelModal} />
     </section>
   )
 }

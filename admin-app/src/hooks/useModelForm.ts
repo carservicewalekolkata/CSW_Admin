@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useCreateModelMutation, useUpdateModelMutation } from '@/store/slices/models/modelsSlice'
 import type { Model } from '@/types/models'
@@ -9,6 +9,7 @@ import useModelServicePicker from '@/hooks/useModelServicePicker'
 import useModelFormServices from '@/hooks/useModelFormServices'
 import useModelFormUploads from '@/hooks/useModelFormUploads'
 import useModelFormSubmission from '@/hooks/useModelFormSubmission'
+import { sanitizeFuelTypes } from '@/utils/models'
 
 type UseModelFormParams = {
   brandOptions: { slug: string; name: string }[]
@@ -36,6 +37,7 @@ export const useModelForm = ({
   const formState = useModelFormState(defaultBrandSlug)
   const servicePicker = useModelServicePicker()
   const [servicePickerError, setServicePickerError] = useState<string | null>(null)
+  const fuelOptions = useMemo(() => formState.values.fuelTypes, [formState.values.fuelTypes])
 
   const [createModel, { isLoading: isCreating }] = useCreateModelMutation()
   const [updateModel, { isLoading: isUpdating }] = useUpdateModelMutation()
@@ -143,6 +145,30 @@ export const useModelForm = ({
     selectService(serviceId)
   }
 
+  const onAddFuelType = useCallback(
+    (value: string) => {
+      const next = sanitizeFuelTypes([...formState.values.fuelTypes, value])
+      formState.setFuelTypes(next)
+    },
+    [formState],
+  )
+
+  const onRemoveFuelType = useCallback(
+    (value: string) => {
+      formState.setFuelTypes(formState.values.fuelTypes.filter((fuel) => fuel !== value))
+    },
+    [formState],
+  )
+
+  useEffect(() => {
+    if (
+      servicePicker.picker.fuelType &&
+      !fuelOptions.some((fuel) => fuel === servicePicker.picker.fuelType)
+    ) {
+      servicePicker.setPicker((prev) => ({ ...prev, fuelType: '' }))
+    }
+  }, [fuelOptions, servicePicker])
+
   return {
     mode: formState.mode,
     values: formState.values,
@@ -157,6 +183,7 @@ export const useModelForm = ({
     brandOptions,
     categoryOptions,
     serviceOptions: servicePicker.serviceOptions,
+    fuelOptions,
     servicePicker: servicePicker.picker,
     servicePickerError,
     isFetchingServices: servicePicker.isFetchingServices,
@@ -169,6 +196,8 @@ export const useModelForm = ({
     onStatusChange: (checked: boolean) => formState.updateField('status', checked),
     onIconIdChange,
     onImagePathChange,
+    onAddFuelType,
+    onRemoveFuelType,
     onSubmit: handleSubmit,
     onIconFileSelected: uploads.handleIconFileSelected,
     onImageFileSelected: uploads.handleImageFileSelected,

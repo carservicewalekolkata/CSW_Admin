@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
+import { FiEye, FiEyeOff } from 'react-icons/fi'
 import { FaCircle } from 'react-icons/fa'
 import { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 
@@ -103,6 +104,8 @@ const LoginForm = () => {
       : null) ||
     authError
 
+  const [showPassword, setShowPassword] = useState(false)
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-body">
       <fieldset className="space-y-2">
@@ -132,15 +135,25 @@ const LoginForm = () => {
             Forgot password?
           </Link>
         </div>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="Enter your password"
-          required
-          autoComplete="current-password"
-          className="block w-full border border-none bg-brand-50/30 px-4 py-3 text-foreground placeholder:text-muted-400 focus:outline-none focus:ring-0 focus:ring-brand-400 focus:ring-offset-0 focus:ring-offset-surface"
-        />
+        <div className="relative">
+          <input
+            id="password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Enter your password"
+            required
+            autoComplete="current-password"
+            className="block w-full border border-none bg-brand-50/30 px-4 py-3 pr-12 text-foreground placeholder:text-muted-400 focus:outline-none focus:ring-0 focus:ring-brand-400 focus:ring-offset-0 focus:ring-offset-surface"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute inset-y-0 right-3 flex items-center text-muted-500 transition hover:text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {showPassword ? <FiEyeOff className="h-5 w-5" /> : <FiEye className="h-5 w-5" />}
+          </button>
+        </div>
       </fieldset>
 
       <div className="flex items-center justify-between text-sm text-muted-500">

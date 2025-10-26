@@ -17,7 +17,9 @@ const SecondaryNavigation = ({ primary, pathname, onNavigate }: SecondaryNavigat
 
     <ul className="space-y-2">
       {primary.secondary.map((item) => {
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+        const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+        const normalizedHref = item.href.replace(/\/+$/, '') || '/'
+        const isActive = normalizedPath === normalizedHref
 
         return (
           <li key={item.id}>

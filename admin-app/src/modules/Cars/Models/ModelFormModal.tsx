@@ -2,6 +2,7 @@
 
 import type { ModelFormModalState } from '@/types/modelsPage'
 import ModelAssetUploadField from './ModelAssetUploadField'
+import ModelFuelTypesField from './ModelFuelTypesField'
 import ModelServicePicker from './ModelServicePicker'
 import ModelServicesList from './ModelServicesList'
 
@@ -116,9 +117,16 @@ const ModelFormModal = ({ modal }: ModelFormModalProps) => {
             />
           </div>
 
+          <ModelFuelTypesField
+            fuels={modal.values.fuelTypes}
+            onAdd={modal.onAddFuelType}
+            onRemove={modal.onRemoveFuelType}
+          />
+
           <ModelServicePicker modal={modal} isFetching={modal.isFetchingServices} />
           <ModelServicesList
             services={modal.values.services}
+            fuelOptions={modal.fuelOptions}
             onRemove={modal.onRemoveService}
             onValueChange={modal.onServiceValueChange}
           />

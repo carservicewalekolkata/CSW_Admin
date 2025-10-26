@@ -3,6 +3,7 @@ import useModelsData from '@/hooks/useModelsData'
 import useModelForm from '@/hooks/useModelForm'
 import useModelDelete from '@/hooks/useModelDelete'
 import useModelServicesPreview from '@/hooks/useModelServicesPreview'
+import useModelFuelModal from '@/hooks/useModelFuelModal'
 import type { ModelFiltersState, UseModelsPageResult } from '@/types/modelsPage'
 
 export const useModelsPage = (): UseModelsPageResult => {
@@ -24,6 +25,7 @@ export const useModelsPage = (): UseModelsPageResult => {
   })
 
   const servicesPreview = useModelServicesPreview()
+  const fuelModal = useModelFuelModal()
 
   const filters: ModelFiltersState = {
     searchName: filtersHook.searchName,
@@ -56,6 +58,7 @@ export const useModelsPage = (): UseModelsPageResult => {
     formModal,
     deleteModal,
     servicesPreview,
+    fuelModal,
   }
 }
 

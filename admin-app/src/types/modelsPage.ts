@@ -7,6 +7,7 @@ import type { ServiceCategory } from './serviceCategories'
 export type ModelFormService = {
   serviceId: string
   serviceName: string
+  fuelType: string
   discount: string
   originalPrice: string
   discountPrice: string
@@ -19,12 +20,14 @@ export type ModelFormValues = {
   status: boolean
   imagePath: string
   iconId: string
+  fuelTypes: string[]
   services: ModelFormService[]
 }
 
 export type ModelServicePickerState = {
   categoryId: string
   serviceId: string
+  fuelType: string
   discount: string
   originalPrice: string
   discountPrice: string
@@ -67,6 +70,7 @@ export type ModelFormModalState = {
   brandOptions: { slug: string; name: string }[]
   categoryOptions: ServiceCategory[]
   serviceOptions: Service[]
+  fuelOptions: string[]
   servicePicker: ModelServicePickerState
   servicePickerError: string | null
   isFetchingServices: boolean
@@ -79,6 +83,8 @@ export type ModelFormModalState = {
   onStatusChange: (value: boolean) => void
   onIconIdChange: (value: string) => void
   onImagePathChange: (value: string) => void
+  onAddFuelType: (value: string) => void
+  onRemoveFuelType: (value: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onIconFileSelected: (file: File) => Promise<void>
   onImageFileSelected: (file: File) => Promise<void>
@@ -91,9 +97,9 @@ export type ModelFormModalState = {
     value: string,
   ) => void
   onAddService: () => void
-  onRemoveService: (serviceId: string) => void
+  onRemoveService: (index: number) => void
   onServiceValueChange: (
-    serviceId: string,
+    index: number,
     field: keyof Omit<ModelFormService, 'serviceId' | 'serviceName'>,
     value: string,
   ) => void
@@ -113,6 +119,14 @@ export type ModelServicesPreviewState = {
   close: () => void
 }
 
+export type ModelFuelModalState = {
+  model: Model | null
+  open: (model: Model) => void
+  close: () => void
+  onSave: (fuelTypes: string[]) => Promise<void>
+  isSaving: boolean
+}
+
 export type UseModelsPageResult = {
   items: Model[]
   isTableLoading: boolean
@@ -121,4 +135,5 @@ export type UseModelsPageResult = {
   formModal: ModelFormModalState
   deleteModal: ModelDeleteModalState
   servicesPreview: ModelServicesPreviewState
+  fuelModal: ModelFuelModalState
 }

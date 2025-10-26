@@ -42,7 +42,7 @@ export const useModelFormSubmission = ({
   const dispatch = useAppDispatch()
 
   const submitCreate = async () => {
-    const { errors, trimmedName, sanitizedSlug } = buildModelFormErrors(formState.values)
+    const { errors, trimmedName, sanitizedSlug, sanitizedFuelTypes } = buildModelFormErrors(formState.values)
     if (Object.keys(errors).length > 0) {
       formState.setErrors(errors)
       return
@@ -56,6 +56,7 @@ export const useModelFormSubmission = ({
         status: formState.values.status,
         imagePath: formState.values.imagePath || undefined,
         iconId: formState.values.iconId || undefined,
+        fuelType: sanitizedFuelTypes.length > 0 ? sanitizedFuelTypes : undefined,
         services:
           formState.values.services.length > 0
             ? buildModelServicesPayload(formState.values.services)

@@ -4,6 +4,7 @@ import { getMongooseModelForConnection } from "@/utils/getMongooseModelForConnec
 
 export interface IModelService {
   services_id: Types.ObjectId;
+  fuel_type?: string | null;
   discount: number;
   original_price: number;
   discount_price: number;
@@ -41,6 +42,7 @@ const schemaFactory = () =>
         type: [
           {
             services_id: { type: Schema.Types.ObjectId, required: true },
+            fuel_type: { type: String, default: null },
             discount: { type: Number, default: 0 },
             original_price: { type: Number, default: 0 },
             discount_price: { type: Number, default: 0 },

@@ -18,6 +18,7 @@ type UseModelServicePickerResult = {
 const initialPickerState: ModelServicePickerState = {
   categoryId: '',
   serviceId: '',
+  fuelType: '',
   discount: '',
   originalPrice: '',
   discountPrice: '',
@@ -33,6 +34,7 @@ export const useModelServicePicker = (): UseModelServicePickerResult => {
       ...prev,
       categoryId,
       serviceId: '',
+      fuelType: '',
     }))
     setServiceOptions([])
 

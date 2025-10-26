@@ -1,6 +1,72 @@
 {
   "sessions": [
     {
+      "token": "440f4cbe-e6c4-4528-8fc9-50c0fe0d5f83",
+      "phone": "8232328323",
+      "createdAt": "2025-10-25T20:08:07.084Z",
+      "updatedAt": "2025-10-25T20:08:07.084Z",
+      "entries": [
+        {
+          "id": "3e5e680d-1a86-466b-8ce2-5f0129259977",
+          "sessionToken": "440f4cbe-e6c4-4528-8fc9-50c0fe0d5f83",
+          "phone": "8232328323",
+          "vehicle": {
+            "brandSlug": "maruti-suzuki",
+            "brandName": "Maruti Suzuki",
+            "modelSlug": "wagon-r",
+            "modelName": "WagonR",
+            "fuelType": "Petrol"
+          },
+          "vehicleSummary": "Petrol Maruti Suzuki WagonR",
+          "createdAt": "2025-10-25T20:08:07.084Z"
+        }
+      ]
+    },
+    {
+      "token": "7557be20-bf37-4f67-9de3-fd6e8380a37a",
+      "phone": "8348734358",
+      "createdAt": "2025-10-25T18:43:59.918Z",
+      "updatedAt": "2025-10-25T18:43:59.918Z",
+      "entries": [
+        {
+          "id": "bccdf4b0-7d95-4493-b4c8-15984dd86710",
+          "sessionToken": "7557be20-bf37-4f67-9de3-fd6e8380a37a",
+          "phone": "8348734358",
+          "vehicle": {
+            "brandSlug": "datsun",
+            "brandName": "Datsun",
+            "modelSlug": "go-plus",
+            "modelName": "GO Plus",
+            "fuelType": "Cng"
+          },
+          "vehicleSummary": "Cng Datsun GO Plus",
+          "createdAt": "2025-10-25T18:43:59.918Z"
+        }
+      ]
+    },
+    {
+      "token": "fd3f5512-5a51-49d1-847b-a2a42e2b745d",
+      "phone": "8978754787",
+      "createdAt": "2025-10-25T18:01:57.865Z",
+      "updatedAt": "2025-10-25T18:01:57.865Z",
+      "entries": [
+        {
+          "id": "9e9be057-928a-4a2d-9a75-ebfdfdf741e0",
+          "sessionToken": "fd3f5512-5a51-49d1-847b-a2a42e2b745d",
+          "phone": "8978754787",
+          "vehicle": {
+            "brandSlug": "datsun",
+            "brandName": "Datsun",
+            "modelSlug": "go",
+            "modelName": "GO",
+            "fuelType": "Petrol"
+          },
+          "vehicleSummary": "Petrol Datsun GO",
+          "createdAt": "2025-10-25T18:01:57.865Z"
+        }
+      ]
+    },
+    {
       "token": "bc9628b9-b6d0-4f3f-8ad1-3f29fe4ee2b7",
       "phone": "8398239283",
       "createdAt": "2025-10-24T22:43:25.664Z",
