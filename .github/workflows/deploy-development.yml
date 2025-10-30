@@ -55,6 +55,9 @@ jobs:
           context: .
           file: ./Dockerfile
           target: runner
+          build-args: |
+            MONGODB_URI=${{ secrets.MONGODB_URI }}
+            DB_CSW_NAME=${{ secrets.DB_CSW_NAME }}
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}

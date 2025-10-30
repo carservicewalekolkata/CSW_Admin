@@ -45,6 +45,15 @@ RUN npm ci
 FROM deps AS builder
 WORKDIR /workspace/admin-app
 COPY admin-app ./
+# Provide required env during Next.js build for pages that access the database.
+# These are injected via build-args from CI. Note: secrets at build time can be
+# cached in private build caches. Prefer dynamic rendering if possible.
+ARG MONGODB_URI
+ARG DB_CSW_NAME
+ARG MONGODB_DB
+ENV MONGODB_URI=${MONGODB_URI} \
+    DB_CSW_NAME=${DB_CSW_NAME} \
+    MONGODB_DB=${MONGODB_DB}
 RUN npm run build
 # Strip dev dependencies before packaging runtime image.
 RUN npm prune --omit=dev
