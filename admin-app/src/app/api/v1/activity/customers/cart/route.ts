@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { updateCustomerCartStatus, CustomerActivityError } from '@/server/customerActivityStore'
 import type { CustomerCartStatus } from '@/types/customerActivity'
 
-const ALLOWED_STATUSES: readonly CustomerCartStatus[] = ['hold', 'solved', 'cancelled']
+const ALLOWED_STATUSES: readonly CustomerCartStatus[] = ['on-cart', 'booked', 'solved', 'cancelled']
 
 export async function PATCH(request: Request) {
   try {

@@ -4,23 +4,43 @@ import { listCustomerSessions } from '@/server/customerActivityStore'
 const buildRows = async (): Promise<CustomerActivityRow[]> => {
   const sessions = await listCustomerSessions()
 
-  const rows = sessions.flatMap((session) =>
-    session.entries.map((entry) => ({
-      id: entry.id,
-      phone: session.phone,
-      vehicleSummary: entry.vehicleSummary,
-      brandName: entry.vehicle.brandName,
-      modelName: entry.vehicle.modelName,
-      fuelType: entry.vehicle.fuelType,
-      searchedAt: entry.createdAt,
-      sessionToken: session.token,
-      searchNumber: 0,
-      cartStatus: entry.cartStatus,
-      cartItems: entry.cartItems,
-      previousQueries: entry.previousQueries,
-      cartHistory: entry.cartHistory,
-    })),
-  )
+  const byPhone = new Map<string, CustomerActivityRow>()
+
+  for (const session of sessions) {
+    const sorted = [...session.entries].sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
+    if (sorted.length === 0) continue
+    const latest = sorted[0]
+    const searchEvents = sorted.map((e) => ({
+      label: `${e.vehicle.fuelType} ${e.vehicle.brandName} ${e.vehicle.modelName}`.replace(/\s+/g, ' ').trim(),
+      timestamp: e.createdAt,
+    }))
+    const searchChips = searchEvents.map((e) => e.label)
+
+    const existing = byPhone.get(session.phone)
+    if (!existing || existing.searchedAt < latest.createdAt) {
+      byPhone.set(session.phone, {
+        id: latest.id,
+        phone: session.phone,
+        vehicleSummary: latest.vehicleSummary,
+        brandName: latest.vehicle.brandName,
+        modelName: latest.vehicle.modelName,
+        searchedAt: latest.createdAt,
+        sessionToken: session.token,
+        searchNumber: 0,
+        searches: Array.from(new Set([...(existing?.searches ?? []), ...searchChips])),
+        searchEvents: [...(existing?.searchEvents ?? []), ...searchEvents],
+        cartStatus: latest.cartStatus,
+        cartItems: latest.cartItems,
+        previousQueries: latest.previousQueries,
+        cartHistory: latest.cartHistory,
+      })
+    } else {
+      existing.searches = Array.from(new Set([...(existing.searches ?? []), ...searchChips]))
+      existing.searchEvents = [...(existing.searchEvents ?? []), ...searchEvents]
+    }
+  }
+
+  const rows = Array.from(byPhone.values())
 
   rows.sort((a, b) => (a.searchedAt > b.searchedAt ? -1 : 1))
   rows.forEach((row, index) => {

@@ -34,36 +34,23 @@ const createCartHistoryEntry = (note: string, status: CustomerCartStatus): Custo
   timestamp: new Date().toISOString(),
 })
 
+const createSearchEvent = (source: string) => ({
+  id: randomUUID(),
+  source,
+  timestamp: new Date().toISOString(),
+})
+
 const seedFromString = (value: string) => {
   return value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
 }
 
-const createDefaultCartMetadata = (vehicle: CustomerActivityVehicle) => {
-  const seed = seedFromString(`${vehicle.brandName}-${vehicle.modelName}-${vehicle.fuelType}`)
-  const items: CustomerCartItem[] = serviceCatalogBlueprint
-    .slice(0, 2 + (seed % 3))
-    .map((item, index) => ({
-      id: randomUUID(),
-      name: `${item.name} (${vehicle.modelName})`,
-      category: item.category,
-      price: item.price + (index * 120 + (seed % 50)),
-      quantity: index === 0 ? 1 : 2,
-    }))
-
-  const previousQueries = [
-    `${vehicle.brandName} ${vehicle.modelName} service cost`,
-    `${vehicle.modelName} ${vehicle.fuelType} nearby workshops`,
-  ]
-
-  const cartHistory = [createCartHistoryEntry('Cart created from vehicle search', 'hold')]
-
-  return {
-    cartStatus: 'hold' as CustomerCartStatus,
-    cartItems: items,
-    previousQueries,
-    cartHistory,
-  }
-}
+const createDefaultCartMetadata = (_vehicle: CustomerActivityVehicle) => ({
+  // Cart starts empty; status defaults to on-cart (user has items in cart but not booked yet).
+  cartStatus: 'on-cart' as CustomerCartStatus,
+  cartItems: [] as CustomerCartItem[],
+  previousQueries: [] as string[],
+  cartHistory: [] as CustomerCartHistory[],
+})
 
 const ensureEntryMetadata = (entry: CustomerActivityEntry): CustomerActivityEntry => {
   let defaults: ReturnType<typeof createDefaultCartMetadata> | null = null
@@ -75,16 +62,20 @@ const ensureEntryMetadata = (entry: CustomerActivityEntry): CustomerActivityEntr
   }
 
   if (!entry.cartStatus) {
-    entry.cartStatus = 'hold'
+    entry.cartStatus = 'on-cart'
   }
-  if (!Array.isArray(entry.cartItems) || entry.cartItems.length === 0) {
+  // Only include items/queries actually sent by the client; default to empty
+  if (!Array.isArray(entry.cartItems)) {
     entry.cartItems = getDefaults().cartItems
   }
-  if (!Array.isArray(entry.previousQueries) || entry.previousQueries.length === 0) {
+  if (!Array.isArray(entry.previousQueries)) {
     entry.previousQueries = getDefaults().previousQueries
   }
-  if (!Array.isArray(entry.cartHistory) || entry.cartHistory.length === 0) {
+  if (!Array.isArray(entry.cartHistory)) {
     entry.cartHistory = getDefaults().cartHistory
+  }
+  if (!Array.isArray((entry as unknown as { searches?: unknown }).searches)) {
+    ;(entry as unknown as { searches: ReturnType<typeof createSearchEvent>[] }).searches = []
   }
   return entry
 }
@@ -113,10 +104,12 @@ const createActivityEntry = (
     vehicle,
     vehicleSummary: formatVehicleSummary(vehicle),
     createdAt: new Date().toISOString(),
+    servicePageVisitedAt: null,
     cartStatus: defaults.cartStatus,
     cartItems: defaults.cartItems,
     previousQueries: defaults.previousQueries,
     cartHistory: defaults.cartHistory,
+    searches: [],
   }
 }
 
@@ -146,6 +139,7 @@ const mapEntry = (
     },
     vehicleSummary: plain.vehicleSummary,
     createdAt: plain.createdAt,
+    servicePageVisitedAt: (plain as unknown as { servicePageVisitedAt?: string | null }).servicePageVisitedAt ?? null,
     cartStatus: plain.cartStatus,
     cartItems: (plain.cartItems ?? []).map((item: CustomerCartItem) => ({
       id: item.id,
@@ -200,6 +194,8 @@ export type RecordCustomerActivityInput = {
   cartItems?: CustomerCartItem[]
   previousQueries?: string[]
   cartHistory?: CustomerCartHistory[]
+  servicePageVisitedAt?: string | null
+  searchSource?: string | null
 }
 
 export type RecordCustomerActivityResult = {
@@ -224,6 +220,8 @@ export const recordCustomerActivity = async ({
   cartItems,
   previousQueries,
   cartHistory,
+  servicePageVisitedAt,
+  searchSource,
 }: RecordCustomerActivityInput): Promise<RecordCustomerActivityResult> => {
   if (!vehicle || !vehicle.brandSlug || !vehicle.modelSlug || !vehicle.fuelType) {
     throw new CustomerActivityError('Invalid vehicle details', 400)
@@ -255,7 +253,11 @@ export const recordCustomerActivity = async ({
       }
     }
 
-    sessionDoc = new SessionModel(createSessionRecord(trimmedPhone))
+    // Reuse existing session document per unique phone; create if absent.
+    sessionDoc = await SessionModel.findOne({ phone: trimmedPhone })
+    if (!sessionDoc) {
+      sessionDoc = new SessionModel(createSessionRecord(trimmedPhone))
+    }
   }
 
   const entry = createActivityEntry(sessionDoc.token, sessionDoc.phone, vehicle)
@@ -270,6 +272,13 @@ export const recordCustomerActivity = async ({
   }
   if (Array.isArray(cartHistory) && cartHistory.length > 0) {
     entry.cartHistory = cartHistory
+  }
+  if (servicePageVisitedAt && typeof servicePageVisitedAt === 'string') {
+    const d = new Date(servicePageVisitedAt)
+    entry.servicePageVisitedAt = Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+  }
+  if (searchSource && typeof searchSource === 'string' && searchSource.trim()) {
+    entry.searches.push(createSearchEvent(searchSource.trim()))
   }
   sessionDoc.entries.unshift(entry as unknown as SessionEntryDocument)
   sessionDoc.updatedAt = entry.createdAt
@@ -290,29 +299,55 @@ export const listCustomerSessions = async (): Promise<CustomerSessionRecord[]> =
 
 export const updateCustomerCartStatus = async (entryId: string, status: CustomerCartStatus) => {
   const SessionModel = await getSessionModel()
+
+  // Load current entry to validate transitions
+  const currentSession = await SessionModel.findOne({ 'entries.id': entryId })
+  if (!currentSession) {
+    throw new CustomerActivityError('Entry not found', 404)
+  }
+  const currentEntry = currentSession.entries.find((e) => e.id === entryId)
+  if (!currentEntry) {
+    throw new CustomerActivityError('Entry not found', 404)
+  }
+
+  const isFinal = currentEntry.cartStatus === 'solved' || currentEntry.cartStatus === 'cancelled'
+  if (isFinal && status !== currentEntry.cartStatus) {
+    throw new CustomerActivityError('Cart status is finalized and cannot be changed', 400)
+  }
+
+  // If requesting the same status and it's already final, just return current snapshot
+  if (isFinal && status === currentEntry.cartStatus) {
+    return mapEntry(toPlain(currentEntry) as CustomerActivityEntry)
+  }
+
   const historyEntry = createCartHistoryEntry(`Status changed to ${status}`, status)
-  const session = await SessionModel.findOneAndUpdate(
+  const now = new Date().toISOString()
+
+  const updateSet: Record<string, unknown> = {
+    'entries.$.cartStatus': status,
+    updatedAt: now,
+  }
+
+  // Clear cart items when moving to a terminal state
+  if (status === 'solved' || status === 'cancelled') {
+    updateSet['entries.$.cartItems'] = []
+  }
+
+  const updated = await SessionModel.findOneAndUpdate(
     { 'entries.id': entryId },
     {
-      $set: {
-        'entries.$.cartStatus': status,
-        updatedAt: new Date().toISOString(),
-      },
-      $push: {
-        'entries.$.cartHistory': historyEntry,
-      },
+      $set: updateSet,
+      $push: { 'entries.$.cartHistory': historyEntry },
     },
     { new: true },
   )
 
-  if (!session) {
+  if (!updated) {
     throw new CustomerActivityError('Entry not found', 404)
   }
-
-  const entry = session.entries.find((item) => item.id === entryId)
+  const entry = updated.entries.find((e) => e.id === entryId)
   if (!entry) {
     throw new CustomerActivityError('Entry not found', 404)
   }
-
   return mapEntry(toPlain(entry) as CustomerActivityEntry)
 }

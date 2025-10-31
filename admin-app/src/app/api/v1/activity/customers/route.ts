@@ -32,6 +32,14 @@ export async function POST(request: Request) {
     const previousQueries = Array.isArray(payload?.previousQueries) ? payload.previousQueries : undefined
     const cartStatus = isValidCartStatus(payload?.cartStatus) ? payload.cartStatus : undefined
     const cartHistory = Array.isArray(payload?.cartHistory) ? payload.cartHistory : undefined
+    const servicePageVisitedAt =
+      typeof payload?.servicePageVisitedAt === 'string' && payload.servicePageVisitedAt.trim().length > 0
+        ? (payload.servicePageVisitedAt as string)
+        : undefined
+    const searchSource =
+      typeof payload?.searchSource === 'string' && payload.searchSource.trim().length > 0
+        ? (payload.searchSource as string)
+        : undefined
 
     if (!isValidVehicle(vehicle)) {
       const response = NextResponse.json({ message: 'Vehicle information is required.' }, { status: 400 })
@@ -46,6 +54,8 @@ export async function POST(request: Request) {
         previousQueries,
         cartStatus,
         cartHistory,
+        servicePageVisitedAt,
+        searchSource,
       })
 
       const response = NextResponse.json({
@@ -77,6 +87,8 @@ export async function POST(request: Request) {
       previousQueries,
       cartStatus,
       cartHistory,
+      servicePageVisitedAt,
+      searchSource,
     })
 
     const response = NextResponse.json({
@@ -100,4 +112,4 @@ export async function POST(request: Request) {
   }
 }
 const isValidCartStatus = (value: unknown): value is CustomerCartStatus =>
-  value === 'hold' || value === 'solved' || value === 'cancelled'
+  value === 'on-cart' || value === 'booked' || value === 'solved' || value === 'cancelled'

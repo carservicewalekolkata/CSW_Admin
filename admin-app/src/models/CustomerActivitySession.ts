@@ -13,7 +13,7 @@ export interface CustomerCartItemDocument extends Document {
 export interface CustomerCartHistoryDocument extends Document {
   id: string
   note: string
-  status: 'hold' | 'solved' | 'cancelled'
+  status: 'on-cart' | 'booked' | 'solved' | 'cancelled'
   timestamp: string
 }
 
@@ -30,10 +30,12 @@ export interface CustomerActivityEntryDocument extends Document {
   }
   vehicleSummary: string
   createdAt: string
-  cartStatus: 'hold' | 'solved' | 'cancelled'
+  servicePageVisitedAt?: string | null
+  cartStatus: 'on-cart' | 'booked' | 'solved' | 'cancelled'
   cartItems: CustomerCartItemDocument[]
   previousQueries: string[]
   cartHistory: CustomerCartHistoryDocument[]
+  searches: CustomerSearchEventDocument[]
 }
 
 export interface CustomerActivitySessionDocument extends Document {
@@ -59,7 +61,7 @@ const cartHistorySchema = new Schema<CustomerCartHistoryDocument>(
   {
     id: { type: String, required: true },
     note: { type: String, required: true },
-    status: { type: String, enum: ['hold', 'solved', 'cancelled'], required: true },
+    status: { type: String, enum: ['on-cart', 'booked', 'solved', 'cancelled'], required: true },
     timestamp: { type: String, required: true },
   },
   { _id: false },
@@ -84,10 +86,24 @@ const entrySchema = new Schema<CustomerActivityEntryDocument>(
     vehicle: { type: vehicleSchema, required: true },
     vehicleSummary: { type: String, required: true },
     createdAt: { type: String, required: true },
-    cartStatus: { type: String, enum: ['hold', 'solved', 'cancelled'], default: 'hold' },
+    servicePageVisitedAt: { type: String, default: null },
+    cartStatus: { type: String, enum: ['on-cart', 'booked', 'solved', 'cancelled'], default: 'on-cart' },
     cartItems: { type: [cartItemSchema], default: [] },
     previousQueries: { type: [String], default: [] },
     cartHistory: { type: [cartHistorySchema], default: [] },
+    searches: {
+      type: [
+        new Schema<CustomerSearchEventDocument>(
+          {
+            id: { type: String, required: true },
+            source: { type: String, required: true },
+            timestamp: { type: String, required: true },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
   },
   { _id: false },
 )
@@ -96,7 +112,7 @@ const sessionSchemaFactory = () =>
   new Schema<CustomerActivitySessionDocument>(
     {
       token: { type: String, required: true, unique: true },
-      phone: { type: String, required: true },
+      phone: { type: String, required: true, unique: true },
       createdAt: { type: String, required: true },
       updatedAt: { type: String, required: true },
       entries: { type: [entrySchema], default: [] },
@@ -112,4 +128,9 @@ export default function getCustomerActivitySessionModel(connection: Connection) 
     'CustomerActivitySession',
     sessionSchemaFactory,
   )
+}
+export interface CustomerSearchEventDocument extends Document {
+  id: string
+  source: string
+  timestamp: string
 }

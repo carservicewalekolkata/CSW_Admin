@@ -6,7 +6,8 @@ export type CustomerActivityVehicle = {
   fuelType: string
 }
 
-export type CustomerCartStatus = 'hold' | 'solved' | 'cancelled'
+// Cart lifecycle: user-driven (on-cart, booked) then admin-driven (solved, cancelled)
+export type CustomerCartStatus = 'on-cart' | 'booked' | 'solved' | 'cancelled'
 
 export type CustomerCartItem = {
   id: string
@@ -23,6 +24,12 @@ export type CustomerCartHistory = {
   timestamp: string
 }
 
+export type CustomerSearchEvent = {
+  id: string
+  source: string
+  timestamp: string
+}
+
 export type CustomerActivityEntry = {
   id: string
   sessionToken: string
@@ -30,10 +37,13 @@ export type CustomerActivityEntry = {
   vehicle: CustomerActivityVehicle
   vehicleSummary: string
   createdAt: string
+  // When the user lands on the services page for this vehicle
+  servicePageVisitedAt?: string | null
   cartStatus: CustomerCartStatus
   cartItems: CustomerCartItem[]
   previousQueries: string[]
   cartHistory: CustomerCartHistory[]
+  searches: CustomerSearchEvent[]
 }
 
 export type CustomerSessionRecord = {
