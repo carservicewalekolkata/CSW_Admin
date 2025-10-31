@@ -1,4 +1,5 @@
 import CustomersActivityTable, { type CustomerActivityRow } from '@/modules/Activity/Customers/CustomersActivityTable'
+export const dynamic = 'force-dynamic'
 import { listCustomerSessions } from '@/server/customerActivityStore'
 
 const buildRows = async (): Promise<CustomerActivityRow[]> => {

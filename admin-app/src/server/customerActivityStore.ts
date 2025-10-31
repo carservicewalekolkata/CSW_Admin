@@ -155,6 +155,16 @@ const mapEntry = (
       status: history.status,
       timestamp: history.timestamp,
     })),
+    // ensure searches exists for type-safety
+    searches: (() => {
+      const raw = (plain as unknown as { searches?: Array<{ id?: unknown; source?: unknown; timestamp?: unknown }> }).searches
+      if (!Array.isArray(raw)) return []
+      return raw.map((s) => ({
+        id: String(s.id ?? randomUUID()),
+        source: String(s.source ?? ''),
+        timestamp: String(s.timestamp ?? new Date().toISOString()),
+      }))
+    })(),
   })
   return source
 }
