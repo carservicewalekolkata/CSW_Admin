@@ -5,7 +5,6 @@ import {
   usePrefetchServices,
 } from '@/store/slices/services/servicesSlice'
 import { useFetchServiceCategoriesQuery } from '@/store/slices/serviceCategories/serviceCategoriesSlice'
-import { useAppSelector } from '@/store/hooks'
 import { resolveServiceErrorMessage } from '@/utils/serviceDetails'
 import type { ServiceCategoryOption } from '@/types/serviceDetailsPage'
 import type { Service, ServiceQuery } from '@/types/services'
@@ -34,12 +33,9 @@ export const useServiceDetailsData = ({
   page,
   pageSize,
 }: UseServiceDetailsDataParams): UseServiceDetailsDataResult => {
-  const { items, total, status, error } = useAppSelector((state) => state.services)
-  const {
-    isLoading,
-    isFetching,
-    refetch,
-  } = useFetchServicesQuery(query, { refetchOnMountOrArgChange: true })
+  // Fetch page-scoped data directly from RTK Query
+  const { data: servicesResponse, isLoading, isFetching, refetch, error } =
+    useFetchServicesQuery(query, { refetchOnMountOrArgChange: true })
   const prefetchServices = usePrefetchServices()
 
   const { data: categoriesResponse } = useFetchServiceCategoriesQuery({
@@ -47,11 +43,17 @@ export const useServiceDetailsData = ({
     sortUpdated: 'desc',
   })
 
+  const items = (servicesResponse?.data ?? []) as Service[]
+  const total =
+    typeof servicesResponse?.total === 'number'
+      ? servicesResponse.total
+      : servicesResponse?.count ?? 0
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const safePage = Math.min(page, totalPages)
   const startIndex = total === 0 ? 0 : (safePage - 1) * pageSize + 1
   const endIndex = total === 0 ? 0 : Math.min(startIndex + Math.max(items.length - 1, 0), total)
-  const isTableLoading = status === 'loading' || isLoading || isFetching
+  const isTableLoading = isLoading || isFetching
 
   useEffect(() => {
     if (!prefetchServices) return

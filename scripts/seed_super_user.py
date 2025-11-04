@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+try:  # Python 3.11+
+    from datetime import UTC  # type: ignore
+except Exception:  # Fallback for Python < 3.11
+    UTC = timezone.utc  # type: ignore
 from pathlib import Path
 from typing import Any, Dict, Optional
 

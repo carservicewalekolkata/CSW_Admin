@@ -47,3 +47,6 @@ next-env.d.ts
 /admin-app/public/assets/images/models
 /admin-app/public/assets/services
 /admin-app/public/assets/services_cache.json
+/admin-app/public/assets/gomechanic_api_map.json
+/admin-app/public/assets/gomechanic_service_overrides.json
+/admin-app/scripts
