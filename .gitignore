@@ -50,3 +50,4 @@ next-env.d.ts
 /admin-app/public/assets/gomechanic_api_map.json
 /admin-app/public/assets/gomechanic_service_overrides.json
 /admin-app/scripts
+!/admin-app/scripts/sitemap-rebuild.sh

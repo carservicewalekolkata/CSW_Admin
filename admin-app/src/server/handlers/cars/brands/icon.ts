@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { GridFSBucket } from 'mongodb'
 import { Types } from 'mongoose'
 
@@ -7,21 +7,12 @@ import { withApiVersion, versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
 import { applyCors, corsPreflight } from '@/server/cors'
 
-type IconRouteContext =
-  | { params: { id: string } }
-  | { params: Promise<{ id: string }> }
-
-const resolveParams = async (context: IconRouteContext) => {
-  const params = context.params instanceof Promise ? await context.params : context.params
-  return params
-}
-
 export async function GET(
-  request: NextRequest,
-  context: IconRouteContext,
+  request: Request,
+  context: { params: Promise<{ id: string }> },
 ): Promise<NextResponse<unknown>> {
   try {
-    const { id } = await resolveParams(context)
+    const { id } = await context.params
 
     const mongooseInstance = await connectToDatabase()
     const db = mongooseInstance.connection.db
@@ -85,7 +76,7 @@ export async function GET(
   }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<unknown>> {
+export async function POST(request: Request): Promise<NextResponse<unknown>> {
   try {
     const mongooseInstance = await connectToDatabase()
     const db = mongooseInstance.connection.db
@@ -197,4 +188,4 @@ export async function POST(request: NextRequest): Promise<NextResponse<unknown>>
   }
 }
 
-export const OPTIONS = (request: NextRequest) => corsPreflight(request)
+export const OPTIONS = (request: Request) => corsPreflight(request)

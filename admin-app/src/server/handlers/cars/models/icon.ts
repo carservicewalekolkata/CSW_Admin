@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { GridFSBucket } from 'mongodb'
 import { Types } from 'mongoose'
 
@@ -6,21 +6,12 @@ import { withApiVersion, versionedJson } from '@/server/apiVersion'
 import { connectToDatabase } from '@/lib/db'
 import { applyCors, corsPreflight } from '@/server/cors'
 
-type IconRouteContext =
-  | { params: { id: string } }
-  | { params: Promise<{ id: string }> }
-
-const resolveParams = async (context: IconRouteContext) => {
-  const params = context.params instanceof Promise ? await context.params : context.params
-  return params
-}
-
 export async function GET(
-  request: NextRequest,
-  context: IconRouteContext,
+  request: Request,
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id: fileId } = await resolveParams(context)
+    const { id: fileId } = await context.params
 
     const mongooseInstance = await connectToDatabase()
     const db = mongooseInstance.connection.db
@@ -70,9 +61,9 @@ export async function GET(
   }
 }
 
-export const OPTIONS = (request: NextRequest) => corsPreflight(request)
+export const OPTIONS = (request: Request) => corsPreflight(request)
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const mongooseInstance = await connectToDatabase()
     const db = mongooseInstance.connection.db
