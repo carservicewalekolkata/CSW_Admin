@@ -7,7 +7,7 @@ export default async function Home() {
   const token = (await cookies()).get(cookieName)?.value
   const secret = new TextEncoder().encode(process.env.JWT_SECRET)
 
-  // Route guard: visitors without a session go straight to the login screen.
+  // Route guard: visitors without a session go straight to the login screen...
   if (!token) redirect('/login')
 
   try {
